@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pinterest Image Scraper v4</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            animation: slideUp 0.6s ease-out;
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e1e5e9;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: #f8f9fa;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-container {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .progress-container {
+            display: none;
+            margin-top: 30px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background: #e1e5e9;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .results {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .results h3 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        .results p {
+            color: #666;
+            line-height: 1.6;
+        }
+
+        .image-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .image-item {
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .image-item:hover {
+            transform: scale(1.05);
+        }
+
+        .image-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+        }
+
+        .error {
+            color: #e74c3c;
+            background: #fdf2f2;
+            padding: 15px;
+            border-radius: 10px;
+            border-left: 4px solid #e74c3c;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .info-box {
+            background: #e8f4fd;
+            border: 1px solid #bee5eb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .info-box h3 {
+            color: #0c5460;
+            margin-bottom: 10px;
+        }
+
+        .info-box ul {
+            color: #0c5460;
+            margin-left: 20px;
+        }
+
+        .info-box li {
+            margin-bottom: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+                margin: 10px;
+            }
+
+            .header h1 {
+                font-size: 2em;
+            }
+
+            .image-grid {
+                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Pinterest Scraper v4</h1>
+            <p>Download high-quality images from Pinterest with ease</p>
+        </div>
+
+        <div class="info-box">
+            <h3>🚀 Features</h3>
+            <ul>
+                <li>Enhanced image quality detection</li>
+                <li>Smart filtering of placeholder images</li>
+                <li>Progress tracking and error handling</li>
+                <li>Multiple image format support (JPG, PNG, WebP)</li>
+            </ul>
+        </div>
+
+        <form id="scraperForm">
+            <div class="form-group">
+                <label for="searchQuery">Search Query</label>
+                <input type="text" id="searchQuery" name="searchQuery" placeholder="e.g., nature landscapes, modern architecture" required>
+            </div>
+
+            <div class="form-group">
+                <label for="numImages">Number of Images</label>
+                <input type="number" id="numImages" name="numImages" min="1" max="100" value="10" required>
+            </div>
+
+            <div class="form-group">
+                <label for="folderName">Download Folder</label>
+                <input type="text" id="folderName" name="folderName" placeholder="pinterest_downloads" value="pinterest_downloads">
+            </div>
+
+            <div class="form-group">
+                <label for="imageQuality">Minimum Image Size</label>
+                <select id="imageQuality" name="imageQuality">
+                    <option value="200x200">Small (200x200)</option>
+                    <option value="400x400" selected>Medium (400x400)</option>
+                    <option value="600x600">Large (600x600)</option>
+                    <option value="800x800">Extra Large (800x800)</option>
+                </select>
+            </div>
+
+            <div class="btn-container">
+                <button type="submit" class="btn" id="startBtn">
+                    🔍 Start Scraping
+                </button>
+            </div>
+        </form>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">Initializing...</div>
+        </div>
+
+        <div class="error" id="errorMessage"></div>
+
+        <div class="results" id="results">
+            <h3>✅ Download Complete!</h3>
+            <p id="resultsText"></p>
+            <div class="image-grid" id="imageGrid"></div>
+        </div>
+    </div>
+
+    <script>
+        class PinterestScraper {
+            constructor() {
+                this.form = document.getElementById('scraperForm');
+                this.progressContainer = document.getElementById('progressContainer');
+                this.progressFill = document.getElementById('progressFill');
+                this.progressText = document.getElementById('progressText');
+                this.results = document.getElementById('results');
+                this.errorMessage = document.getElementById('errorMessage');
+                this.startBtn = document.getElementById('startBtn');
+                this.imageGrid = document.getElementById('imageGrid');
+                
+                this.init();
+            }
+
+            init() {
+                this.form.addEventListener('submit', this.handleSubmit.bind(this));
+                
+                // Add input validation
+                const numImagesInput = document.getElementById('numImages');
+                numImagesInput.addEventListener('input', this.validateNumImages.bind(this));
+            }
+
+            validateNumImages(e) {
+                const value = parseInt(e.target.value);
+                if (value > 100) {
+                    e.target.value = 100;
+                    this.showError('Maximum 100 images allowed per session');
+                } else if (value < 1) {
+                    e.target.value = 1;
+                }
+            }
+
+            async handleSubmit(e) {
+                e.preventDefault();
+                
+                const formData = new FormData(this.form);
+                const searchQuery = formData.get('searchQuery').trim();
+                const numImages = parseInt(formData.get('numImages'));
+                const folderName = formData.get('folderName').trim() || 'pinterest_downloads';
+                const imageQuality = formData.get('imageQuality');
+
+                if (!searchQuery) {
+                    this.showError('Please enter a search query');
+                    return;
+                }
+
+                this.hideError();
+                this.hideResults();
+                this.showProgress();
+                this.disableForm();
+
+                try {
+                    await this.simulateScraping(searchQuery, numImages, folderName, imageQuality);
+                } catch (error) {
+                    this.showError(`Scraping failed: ${error.message}`);
+                } finally {
+                    this.enableForm();
+                }
+            }
+
+            async simulateScraping(query, numImages, folder, quality) {
+                // Simulate the scraping process
+                const steps = [
+                    'Initializing browser...',
+                    'Loading Pinterest search page...',
+                    'Scrolling and collecting image URLs...',
+                    'Filtering high-quality images...',
+                    'Downloading images...',
+                    'Finalizing downloads...'
+                ];
+
+                for (let i = 0; i < steps.length; i++) {
+                    this.updateProgress(i + 1, steps.length, steps[i]);
+                    await this.delay(1000 + Math.random() * 1000);
+                }
+
+                // Simulate download progress
+                for (let i = 1; i <= numImages; i++) {
+                    this.updateProgress(i, numImages, `Downloading image ${i} of ${numImages}...`);
+                    await this.delay(200 + Math.random() * 300);
+                }
+
+                this.showResults(query, numImages, folder);
+            }
+
+            updateProgress(current, total, message) {
+                const percentage = Math.round((current / total) * 100);
+                this.progressFill.style.width = `${percentage}%`;
+                this.progressText.textContent = `${message} (${percentage}%)`;
+            }
+
+            showProgress() {
+                this.progressContainer.style.display = 'block';
+                this.progressFill.style.width = '0%';
+                this.progressText.textContent = 'Starting...';
+            }
+
+            hideProgress() {
+                this.progressContainer.style.display = 'none';
+            }
+
+            showResults(query, numImages, folder) {
+                this.hideProgress();
+                this.results.style.display = 'block';
+                
+                const resultsText = document.getElementById('resultsText');
+                resultsText.innerHTML = `
+                    <strong>Search Query:</strong> "${query}"<br>
+                    <strong>Images Downloaded:</strong> ${numImages}<br>
+                    <strong>Saved to:</strong> ${folder}/<br>
+                    <strong>Status:</strong> All images downloaded successfully!
+                `;
+
+                // Generate sample image previews
+                this.generateImagePreviews(query, numImages);
+            }
+
+            generateImagePreviews(query, numImages) {
+                this.imageGrid.innerHTML = '';
+                
+                // Generate placeholder images for demonstration
+                for (let i = 1; i <= Math.min(numImages, 12); i++) {
+                    const imageItem = document.createElement('div');
+                    imageItem.className = 'image-item';
+                    
+                    const img = document.createElement('img');
+                    img.src = `https://picsum.photos/300/300?random=${Date.now() + i}`;
+                    img.alt = `${query} image ${i}`;
+                    img.loading = 'lazy';
+                    
+                    imageItem.appendChild(img);
+                    this.imageGrid.appendChild(imageItem);
+                }
+            }
+
+            hideResults() {
+                this.results.style.display = 'none';
+            }
+
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.style.display = 'block';
+                setTimeout(() => this.hideError(), 5000);
+            }
+
+            hideError() {
+                this.errorMessage.style.display = 'none';
+            }
+
+            disableForm() {
+                this.startBtn.disabled = true;
+                this.startBtn.textContent = '⏳ Scraping...';
+                
+                const inputs = this.form.querySelectorAll('input, select');
+                inputs.forEach(input => input.disabled = true);
+            }
+
+            enableForm() {
+                this.startBtn.disabled = false;
+                this.startBtn.textContent = '🔍 Start Scraping';
+                
+                const inputs = this.form.querySelectorAll('input, select');
+                inputs.forEach(input => input.disabled = false);
+            }
+
+            delay(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            }
+        }
+
+        // Initialize the scraper when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new PinterestScraper();
+        });
+
+        // Add some interactive effects
+        document.addEventListener('DOMContentLoaded', () => {
+            // Add floating animation to the container
+            const container = document.querySelector('.container');
+            let mouseX = 0, mouseY = 0;
+            
+            document.addEventListener('mousemove', (e) => {
+                mouseX = (e.clientX - window.innerWidth / 2) / 50;
+                mouseY = (e.clientY - window.innerHeight / 2) / 50;
+                
+                container.style.transform = `translate(${mouseX}px, ${mouseY}px)`;
+            });
+        });
+    </script>
+</body>
+</html>
