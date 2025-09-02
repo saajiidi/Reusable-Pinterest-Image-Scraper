@@ -35,7 +35,7 @@ class PinterestHandler(http.server.SimpleHTTPRequestHandler):
     
     def serve_index(self):
         try:
-            with open('index_v4.html', 'r', encoding='utf-8') as f:
+            with open('index.html', 'r', encoding='utf-8') as f:
                 content = f.read()
             
             # Update the JavaScript to use the correct API endpoints
@@ -49,7 +49,7 @@ class PinterestHandler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.send_header('Content-type', 'text/html')
             self.end_headers()
-            self.wfile.write(b'<h1>index_v4.html not found</h1>')
+            self.wfile.write(b'<h1>index.html not found</h1>')
     
     def serve_progress(self):
         global current_progress
