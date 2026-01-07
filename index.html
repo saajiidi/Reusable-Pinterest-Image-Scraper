@@ -22,24 +22,19 @@
         }
 
         .container {
-            background: white;
+            background: var(--container-bg, rgba(255,255,255,0.9));
             border-radius: 20px;
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
             padding: 40px;
             max-width: 600px;
             width: 100%;
             animation: slideUp 0.6s ease-out;
+            backdrop-filter: blur(10px);
         }
 
         @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
         .header {
@@ -74,7 +69,8 @@
             font-size: 1.1em;
         }
 
-        .form-group input, .form-group select {
+        .form-group input,
+        .form-group select {
             width: 100%;
             padding: 15px;
             border: 2px solid #e1e5e9;
@@ -84,7 +80,8 @@
             background: #f8f9fa;
         }
 
-        .form-group input:focus, .form-group select:focus {
+        .form-group input:focus,
+        .form-group select:focus {
             outline: none;
             border-color: #667eea;
             background: white;
@@ -114,140 +111,60 @@
             box-shadow: 0 15px 30px rgba(102, 126, 234, 0.4);
         }
 
-        .btn:active {
-            transform: translateY(0);
+        .btn:active { transform: translateY(0); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+
+        .progress-container { display: none; margin-top: 30px; }
+        .progress-bar { width: 100%; height: 10px; background: #e1e5e9; border-radius: 5px; overflow: hidden; margin-bottom: 15px; }
+        .progress-fill { height: 100%; background: linear-gradient(135deg, #667eea, #764ba2); width: 0%; transition: width 0.3s ease; }
+        .progress-text { text-align: center; color: #666; font-weight: 600; }
+
+        .results { display: none; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px; border-left: 4px solid #667eea; }
+        .results h3 { color: #333; margin-bottom: 10px; }
+        .results p { color: #666; line-height: 1.6; }
+
+        .image-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; margin-top: 20px; }
+        .image-item { border-radius: 10px; overflow: hidden; box-shadow: 0 5px 15px rgba(0,0,0,0.1); transition: transform 0.3s ease; }
+        .image-item:hover { transform: scale(1.05); }
+        .image-item img { width: 100%; height: 150px; object-fit: cover; }
+
+        .error { color: #e74c3c; background: #fdf2f2; padding: 15px; border-radius: 10px; border-left: 4px solid #e74c3c; margin-top: 20px; display: none; }
+
+        .info-box { background: #e8f4fd; border: 1px solid #bee5eb; border-radius: 10px; padding: 20px; margin-bottom: 30px; }
+        .info-box h3 { color: #0c5460; margin-bottom: 10px; }
+        .info-box ul { color: #0c5460; margin-left: 20px; }
+        .info-box li { margin-bottom: 5px; }
+
+        /* Dark mode support */
+        @media (prefers-color-scheme: dark) {
+            :root { --container-bg: rgba(30,30,30,0.9); }
+            body { background: #111; }
+            .container { color: #eee; }
+            .header h1 { color: #fff; }
+            .header p, .form-group label, .results, .info-box, .error { color: #ccc; }
+            .form-group input, .form-group select { background: #222; border-color: #444; color: #eee; }
+            .form-group input:focus, .form-group select:focus { border-color: #667eea; background: #333; }
+            .progress-bar { background: #444; }
+            .progress-fill { background: linear-gradient(135deg, #667eea, #764ba2); }
+            .results { background: #222; border-left-color: #667eea; }
+            .info-box { background: #2a2a2a; border-color: #555; }
+            .error { background: #2a0e0e; border-left-color: #e74c3c; }
         }
 
-        .btn:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-            transform: none;
-        }
-
-        .progress-container {
-            display: none;
-            margin-top: 30px;
-        }
-
-        .progress-bar {
-            width: 100%;
-            height: 10px;
-            background: #e1e5e9;
-            border-radius: 5px;
-            overflow: hidden;
-            margin-bottom: 15px;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            width: 0%;
-            transition: width 0.3s ease;
-        }
-
-        .progress-text {
-            text-align: center;
-            color: #666;
-            font-weight: 600;
-        }
-
-        .results {
-            display: none;
-            margin-top: 30px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            border-left: 4px solid #667eea;
-        }
-
-        .results h3 {
-            color: #333;
-            margin-bottom: 10px;
-        }
-
-        .results p {
-            color: #666;
-            line-height: 1.6;
-        }
-
-        .image-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-
-        .image-item {
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s ease;
-        }
-
-        .image-item:hover {
-            transform: scale(1.05);
-        }
-
-        .image-item img {
-            width: 100%;
-            height: 150px;
-            object-fit: cover;
-        }
-
-        .error {
-            color: #e74c3c;
-            background: #fdf2f2;
-            padding: 15px;
-            border-radius: 10px;
-            border-left: 4px solid #e74c3c;
-            margin-top: 20px;
-            display: none;
-        }
-
-        .info-box {
-            background: #e8f4fd;
-            border: 1px solid #bee5eb;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 30px;
-        }
-
-        .info-box h3 {
-            color: #0c5460;
-            margin-bottom: 10px;
-        }
-
-        .info-box ul {
-            color: #0c5460;
-            margin-left: 20px;
-        }
-
-        .info-box li {
-            margin-bottom: 5px;
-        }
-
+        /* Mobile adjustments */
         @media (max-width: 768px) {
-            .container {
-                padding: 20px;
-                margin: 10px;
-            }
-
-            .header h1 {
-                font-size: 2em;
-            }
-
-            .image-grid {
-                grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-                gap: 10px;
-            }
+            .container { padding: 20px; margin: 10px; }
+            .header h1 { font-size: 2em; }
+            .image-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 10px; }
         }
     </style>
+    <meta name="description" content="A modern, premium Pinterest image scraper with sleek UI, progress tracking, and responsive design. Works on GitHub Pages.">
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>Pinterest Scraper v4</h1>
-            <p>Download high-quality images from Pinterest with ease</p>
+            <h1>Pinterest Scraper</h1>
+            <p>Download high‑quality images from Pinterest with a premium UI.</p>
         </div>
 
         <div class="info-box">
@@ -257,6 +174,7 @@
                 <li>Smart filtering of placeholder images</li>
                 <li>Progress tracking and error handling</li>
                 <li>Multiple image format support (JPG, PNG, WebP)</li>
+                <li>Responsive, dark‑mode ready design</li>
             </ul>
         </div>
 
@@ -265,17 +183,14 @@
                 <label for="searchQuery">Search Query</label>
                 <input type="text" id="searchQuery" name="searchQuery" placeholder="e.g., nature landscapes, modern architecture" required>
             </div>
-
             <div class="form-group">
                 <label for="numImages">Number of Images</label>
                 <input type="number" id="numImages" name="numImages" min="1" max="100" value="10" required>
             </div>
-
             <div class="form-group">
                 <label for="folderName">Download Folder</label>
                 <input type="text" id="folderName" name="folderName" placeholder="pinterest_downloads" value="pinterest_downloads">
             </div>
-
             <div class="form-group">
                 <label for="imageQuality">Minimum Image Size</label>
                 <select id="imageQuality" name="imageQuality">
@@ -285,18 +200,13 @@
                     <option value="800x800">Extra Large (800x800)</option>
                 </select>
             </div>
-
             <div class="btn-container">
-                <button type="submit" class="btn" id="startBtn">
-                    🔍 Start Scraping
-                </button>
+                <button type="submit" class="btn" id="startBtn">🔍 Start Scraping</button>
             </div>
         </form>
 
         <div class="progress-container" id="progressContainer">
-            <div class="progress-bar">
-                <div class="progress-fill" id="progressFill"></div>
-            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
             <div class="progress-text" id="progressText">Initializing...</div>
         </div>
 
@@ -320,58 +230,37 @@
                 this.errorMessage = document.getElementById('errorMessage');
                 this.startBtn = document.getElementById('startBtn');
                 this.imageGrid = document.getElementById('imageGrid');
-                
                 this.init();
             }
 
             init() {
                 this.form.addEventListener('submit', this.handleSubmit.bind(this));
-                
-                // Add input validation
                 const numImagesInput = document.getElementById('numImages');
                 numImagesInput.addEventListener('input', this.validateNumImages.bind(this));
             }
 
             validateNumImages(e) {
                 const value = parseInt(e.target.value);
-                if (value > 100) {
-                    e.target.value = 100;
-                    this.showError('Maximum 100 images allowed per session');
-                } else if (value < 1) {
-                    e.target.value = 1;
-                }
+                if (value > 100) { e.target.value = 100; this.showError('Maximum 100 images allowed per session'); }
+                else if (value < 1) { e.target.value = 1; }
             }
 
             async handleSubmit(e) {
                 e.preventDefault();
-                
                 const formData = new FormData(this.form);
                 const searchQuery = formData.get('searchQuery').trim();
                 const numImages = parseInt(formData.get('numImages'));
                 const folderName = formData.get('folderName').trim() || 'pinterest_downloads';
                 const imageQuality = formData.get('imageQuality');
 
-                if (!searchQuery) {
-                    this.showError('Please enter a search query');
-                    return;
-                }
-
-                this.hideError();
-                this.hideResults();
-                this.showProgress();
-                this.disableForm();
-
-                try {
-                    await this.simulateScraping(searchQuery, numImages, folderName, imageQuality);
-                } catch (error) {
-                    this.showError(`Scraping failed: ${error.message}`);
-                } finally {
-                    this.enableForm();
-                }
+                if (!searchQuery) { this.showError('Please enter a search query'); return; }
+                this.hideError(); this.hideResults(); this.showProgress(); this.disableForm();
+                try { await this.simulateScraping(searchQuery, numImages, folderName, imageQuality); }
+                catch (error) { this.showError(`Scraping failed: ${error.message}`); }
+                finally { this.enableForm(); }
             }
 
             async simulateScraping(query, numImages, folder, quality) {
-                // Simulate the scraping process
                 const steps = [
                     'Initializing browser...',
                     'Loading Pinterest search page...',
@@ -380,18 +269,14 @@
                     'Downloading images...',
                     'Finalizing downloads...'
                 ];
-
                 for (let i = 0; i < steps.length; i++) {
                     this.updateProgress(i + 1, steps.length, steps[i]);
-                    await this.delay(1000 + Math.random() * 1000);
+                    await this.delay(800 + Math.random() * 700);
                 }
-
-                // Simulate download progress
                 for (let i = 1; i <= numImages; i++) {
                     this.updateProgress(i, numImages, `Downloading image ${i} of ${numImages}...`);
-                    await this.delay(200 + Math.random() * 300);
+                    await this.delay(150 + Math.random() * 200);
                 }
-
                 this.showResults(query, numImages, folder);
             }
 
@@ -401,93 +286,30 @@
                 this.progressText.textContent = `${message} (${percentage}%)`;
             }
 
-            showProgress() {
-                this.progressContainer.style.display = 'block';
-                this.progressFill.style.width = '0%';
-                this.progressText.textContent = 'Starting...';
-            }
-
-            hideProgress() {
-                this.progressContainer.style.display = 'none';
-            }
+            showProgress() { this.progressContainer.style.display = 'block'; this.progressFill.style.width = '0%'; this.progressText.textContent = 'Starting...'; }
+            hideProgress() { this.progressContainer.style.display = 'none'; }
 
             showResults(query, numImages, folder) {
                 this.hideProgress();
                 this.results.style.display = 'block';
-                
                 const resultsText = document.getElementById('resultsText');
                 resultsText.innerHTML = `
                     <strong>Search Query:</strong> "${query}"<br>
                     <strong>Images Downloaded:</strong> ${numImages}<br>
                     <strong>Saved to:</strong> ${folder}/<br>
-                    <strong>Status:</strong> All images downloaded successfully!
-                `;
-
-                // Generate sample image previews
-                this.generateImagePreviews(query, numImages);
+                    <strong>Status:</strong> All images downloaded successfully!`;
+                this.generateImagePreviews(numImages);
             }
 
-            generateImagePreviews(query, numImages) {
+            generateImagePreviews(numImages) {
                 this.imageGrid.innerHTML = '';
-                
-                // Generate placeholder images for demonstration
                 for (let i = 1; i <= Math.min(numImages, 12); i++) {
-                    const imageItem = document.createElement('div');
-                    imageItem.className = 'image-item';
-                    
+                    const div = document.createElement('div');
+                    div.className = 'image-item';
                     const img = document.createElement('img');
                     img.src = `https://picsum.photos/300/300?random=${Date.now() + i}`;
-                    img.alt = `${query} image ${i}`;
+                    img.alt = `Preview ${i}`;
                     img.loading = 'lazy';
-                    
-                    imageItem.appendChild(img);
-                    this.imageGrid.appendChild(imageItem);
-                }
-            }
-
-            hideResults() {
-                this.results.style.display = 'none';
-            }
-
-            showError(message) {
-                this.errorMessage.textContent = message;
-                this.errorMessage.style.display = 'block';
-                setTimeout(() => this.hideError(), 5000);
-            }
-
-            hideError() {
-                this.errorMessage.style.display = 'none';
-            }
-
-            disableForm() {
-                this.startBtn.disabled = true;
-                this.startBtn.textContent = '⏳ Scraping...';
-                
-                const inputs = this.form.querySelectorAll('input, select');
-                inputs.forEach(input => input.disabled = true);
-            }
-
-            enableForm() {
-                this.startBtn.disabled = false;
-                this.startBtn.textContent = '🔍 Start Scraping';
-                
-                const inputs = this.form.querySelectorAll('input, select');
-                inputs.forEach(input => input.disabled = false);
-            }
-
-            delay(ms) {
-                return new Promise(resolve => setTimeout(resolve, ms));
-            }
-        }
-
-        // Initialize the scraper when the page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            new PinterestScraper();
-        });
-
-        // Add some interactive effects
-        document.addEventListener('DOMContentLoaded', () => {
-            // Add floating animation to the container
             const container = document.querySelector('.container');
             let mouseX = 0, mouseY = 0;
             
