@@ -2,6 +2,7 @@ import streamlit as st
 import os
 import time
 import requests
+import zipfile
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
@@ -39,6 +40,14 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# Main App Layout
+st.title("📌 Pinterest Image Scraper v5")
+st.markdown("Download high-quality images from Pinterest with ease.")
+
+# Initialize session state for downloaded files
+if 'downloaded_files' not in st.session_state:
+    st.session_state.downloaded_files = []
 
 # Helper functions (adapted from v4)
 def setup_driver(headless=True):
@@ -97,9 +106,14 @@ def download_image(url, folder_name, image_name, min_size=(200, 200)):
     except Exception as e:
         return False, str(e)
 
-# Main App Layout
-st.title("📌 Pinterest Image Scraper v5")
-st.markdown("Download high-quality images from Pinterest with ease.")
+def create_zip(file_paths):
+    """Create a zip file from a list of file paths."""
+    zip_buffer = BytesIO()
+    with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+        for file_path in file_paths:
+            if os.path.exists(file_path):
+                zip_file.write(file_path, os.path.basename(file_path))
+    return zip_buffer.getvalue()
 
 # Sidebar controls
 with st.sidebar:
@@ -123,10 +137,12 @@ if st.button("Start Scraping"):
         if not os.path.exists(folder_name):
             os.makedirs(folder_name)
         
+        # Reset previous downloads in session state
+        st.session_state.downloaded_files = []
+        
         # Initialize status containers
         status_text = st.empty()
         progress_bar = st.progress(0)
-        image_gallery = st.container()
         
         status_text.info(f"Initializing scraper for '{query}'...")
         
@@ -142,7 +158,6 @@ if st.button("Start Scraping"):
                 
                 downloaded_count = 0
                 processed_urls = set()
-                downloaded_files = []
                 scroll_attempts = 0
                 max_scrolls = 20
                 
@@ -173,7 +188,7 @@ if st.button("Start Scraping"):
                             
                             if success:
                                 downloaded_count += 1
-                                downloaded_files.append(result)
+                                st.session_state.downloaded_files.append(result)
                                 # Update progress
                                 progress = downloaded_count / num_images
                                 progress_bar.progress(progress)
@@ -192,22 +207,53 @@ if st.button("Start Scraping"):
                     st.success(f"✅ Successfully downloaded {downloaded_count} images!")
                 else:
                     st.warning(f"⚠️ Stopped after downloading {downloaded_count} images (couldn't find more).")
-                
-                # Display results
-                st.subheader("Downloaded Images")
-                cols = st.columns(4)
-                for idx, file_path in enumerate(downloaded_files):
-                    with cols[idx % 4]:
-                        try:
-                            image = Image.open(file_path)
-                            st.image(image, caption=os.path.basename(file_path), use_column_width=True)
-                        except:
-                            pass
                             
             except Exception as e:
                 st.error(f"An error occurred: {str(e)}")
             finally:
                 driver.quit()
+
+# Display Results and Download Options
+if st.session_state.downloaded_files:
+    st.markdown("---")
+    st.subheader("Downloaded Images")
+    
+    # Selection Form
+    with st.form("selection_form"):
+        st.write("Select images to download:")
+        
+        # Select All Checkbox (implemented logic outside form usually, but simplified here)
+        # We will iterate and capture checked states
+        
+        cols = st.columns(4)
+        selected_images = []
+        
+        # Display images in grid with checkboxes
+        for idx, file_path in enumerate(st.session_state.downloaded_files):
+            col = cols[idx % 4]
+            with col:
+                try:
+                    image = Image.open(file_path)
+                    st.image(image, use_column_width=True)
+                    # Use unique key for each checkbox
+                    if st.checkbox(f"Select {os.path.basename(file_path)}", key=f"select_{idx}", value=True):
+                        selected_images.append(file_path)
+                except:
+                    st.error(f"Error loading {os.path.basename(file_path)}")
+
+        submitted = st.form_submit_button("Prepare Download")
+        
+        if submitted:
+            if selected_images:
+                zip_data = create_zip(selected_images)
+                st.download_button(
+                    label=f"⬇️ Download {len(selected_images)} Selected Images (ZIP)",
+                    data=zip_data,
+                    file_name="pinterest_images.zip",
+                    mime="application/zip"
+                )
+            else:
+                st.warning("No images selected.")
 
 # Instructions
 st.markdown("---")
@@ -217,5 +263,5 @@ with st.expander("How to use"):
     2. Select how many images you want.
     3. (Optional) Adjust quality and folder name.
     4. Click **Start Scraping**.
-    5. The images will be saved to your local folder and displayed here.
+    5. Once finished, you can select specific images and download them as a ZIP file.
     """)
