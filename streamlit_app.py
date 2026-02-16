@@ -126,7 +126,10 @@ with st.container():
 
 # Advanced Options (Hidden by default to reduce noise)
 with st.expander("⚙️ Settings"):
-    folder_name = st.text_input("Folder", value="pinterest_downloads")
+    # smart default: Users/Downloads/Pinterest_Images
+    default_path = os.path.join(os.path.expanduser("~"), "Downloads", "Pinterest_Images")
+    folder_name = st.text_input("Save Location", value=default_path)
+    
     quality = st.select_slider("Quality", options=["Low", "Medium", "High"], value="Medium")
     min_size = (200, 200) if quality == "Low" else (400, 400) if quality == "Medium" else (800, 600)
 
