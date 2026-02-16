@@ -54,7 +54,11 @@ def setup_driver(headless=True):
     chrome_options.add_argument("--log-level=3")  # Suppress logs
     
     try:
-        driver = webdriver.Chrome(options=chrome_options)
+        from selenium.webdriver.chrome.service import Service
+        from webdriver_manager.chrome import ChromeDriverManager
+        
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
         return driver
     except Exception as e:
         st.error(f"Error setting up Chrome driver: {str(e)}")
