@@ -67,6 +67,23 @@ def setup_driver(headless=True):
     chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument("--log-level=3")
     
+    # Check for system installed chromium (e.g. Streamlit Cloud)
+    system_chromium = "/usr/bin/chromium"
+    system_driver = "/usr/bin/chromedriver"
+    
+    if os.path.exists(system_chromium) and os.path.exists(system_driver):
+        chrome_options.binary_location = system_chromium
+        try:
+            from selenium.webdriver.chrome.service import Service
+            service = Service(system_driver)
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            return driver
+        except Exception as e:
+            st.error(f"System Driver Error: {str(e)}")
+            # Fallback to webdriver_manager if system driver fails
+            pass
+    
+    # Fallback/Default (Windows/Mac/Local)
     try:
         from selenium.webdriver.chrome.service import Service
         from webdriver_manager.chrome import ChromeDriverManager
