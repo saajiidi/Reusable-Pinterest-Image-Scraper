@@ -236,7 +236,7 @@ if st.session_state.downloaded_files:
                     image = Image.open(file_path)
                     st.image(image, use_column_width=True)
                     # Use unique key for each checkbox
-                    if st.checkbox(f"Select {os.path.basename(file_path)}", key=f"select_{idx}", value=True):
+                    if st.checkbox(f"Select {os.path.basename(file_path)}", key=f"select_{file_path}", value=True):
                         selected_images.append(file_path)
                 except:
                     st.error(f"Error loading {os.path.basename(file_path)}")
