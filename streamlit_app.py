@@ -219,11 +219,9 @@ if st.session_state.downloaded_files:
     st.subheader("Downloaded Images")
     
     # Selection Form
+    # Selection Form
     with st.form("selection_form"):
         st.write("Select images to download:")
-        
-        # Select All Checkbox (implemented logic outside form usually, but simplified here)
-        # We will iterate and capture checked states
         
         cols = st.columns(4)
         selected_images = []
@@ -243,17 +241,22 @@ if st.session_state.downloaded_files:
 
         submitted = st.form_submit_button("Prepare Download")
         
-        if submitted:
-            if selected_images:
-                zip_data = create_zip(selected_images)
-                st.download_button(
-                    label=f"⬇️ Download {len(selected_images)} Selected Images (ZIP)",
-                    data=zip_data,
-                    file_name="pinterest_images.zip",
-                    mime="application/zip"
-                )
-            else:
-                st.warning("No images selected.")
+    if submitted:
+        if selected_images:
+            zip_data = create_zip(selected_images)
+            st.session_state['prepared_zip'] = zip_data
+            st.success(f"Ready to download {len(selected_images)} images!")
+        else:
+            st.session_state['prepared_zip'] = None
+            st.warning("No images selected.")
+
+    if st.session_state.get('prepared_zip'):
+        st.download_button(
+            label="⬇️ Download Selected Images (ZIP)",
+            data=st.session_state['prepared_zip'],
+            file_name="pinterest_images.zip",
+            mime="application/zip"
+        )
 
 # Instructions
 st.markdown("---")
