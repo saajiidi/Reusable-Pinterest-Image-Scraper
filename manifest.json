@@ -1,0 +1,16 @@
+{
+    "name": "Pinterest Scraper Pro",
+    "short_name": "PinScraper",
+    "description": "Download Pinterest images easily on mobile.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#E60023",
+    "icons": [
+        {
+            "src": "https://cdn-icons-png.flaticon.com/512/145/145808.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
