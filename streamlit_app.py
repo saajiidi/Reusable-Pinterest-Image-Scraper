@@ -112,11 +112,65 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # Helper functions
-def get_safe_filename(query, index, source):
-    clean_query = "".join([c for c in query if c.isalnum() or c in (' ', '_')]).rstrip()
-    return f"{source}_{clean_query.replace(' ', '_')}_{index+1}.jpg"
+def resolve_high_res(url, source):
+    """Bypasses blurred/sensitive thumbnails by resolving original high-res links."""
+    if not url: return url
+    try:
+        if source == "Pinterest":
+            # Pinterest: thumbnails are usually in /236x/ or /736x/. Originals are in /originals/
+            # This often bypasses 'sensitive content' blurs applied to thumbnails
+            if '/236x/' in url: return url.replace('/236x/', '/originals/')
+            if '/736x/' in url: return url.replace('/736x/', '/originals/')
+        elif source == "Unsplash":
+            # Unsplash: Remove image processing params to get raw source
+            if '?' in url: return url.split('?')[0]
+        elif source == "Pixabay":
+            # Pixabay: Replace _340 (thumbnail) with _1280 (high res)
+            return url.replace('_340.', '_1280.')
+    except: pass
+    return url
 
-# ... rest of helper functions ...
+def setup_driver(headless=True):
+    chrome_options = Options()
+    if headless: chrome_options.add_argument('--headless')
+    chrome_options.add_argument('--no-sandbox')
+    chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument("--log-level=3")
+    # Add User-Agent to avoid some 'sensitive' gates
+    chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
+    
+    try:
+        from selenium.webdriver.chrome.service import Service
+        from webdriver_manager.chrome import ChromeDriverManager
+        service = Service(ChromeDriverManager().install())
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        return driver
+    except:
+        return None
+
+def is_valid_image_url(url):
+    if not url or not url.startswith('http'): return False
+    skip = ['data:image', '1x1', 'avatar', 'profile', 'icon', 'loading']
+    return not any(p in url.lower() for p in skip)
+
+def fast_download(url, folder, name, min_size):
+    try:
+        response = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=5)
+        if response.status_code == 200:
+            img = Image.open(BytesIO(response.content))
+            if img.size[0] >= min_size[0] and img.size[1] >= min_size[1]:
+                path = os.path.join(folder, name)
+                with open(path, "wb") as f: f.write(response.content)
+                return path
+    except: pass
+    return None
+
+def create_zip(file_paths):
+    buf = BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for p in file_paths:
+            if os.path.exists(p): z.write(p, os.path.basename(p))
+    return buf.getvalue()
 
 # Session State
 if 'files' not in st.session_state: st.session_state.files = []
@@ -131,7 +185,7 @@ with st.container():
     c1, c2, c3 = st.columns(3)
     with c1: turbo = st.checkbox("🚀 Turbo", value=True)
     with c2: preview = st.checkbox("👁️ Live", value=True)
-    with c3: low_data = st.checkbox("📉 Eco", value=False, help="Low data mode for mobile")
+    with c3: unlock = st.checkbox("� Bypass", value=True, help="Force original high-res (Fixes Blur/Sensitive marks)")
 
 # Config Section
 with st.container():
@@ -152,44 +206,102 @@ for i, c in enumerate(q_chips):
 with st.expander("⚙️ Fine-Tune Parameters"):
     out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "UltraScraper")
     quality = st.select_slider("Quality", ["Fast", "High", "Ultra"], value="High")
-    min_res = (200,200) if low_data else (300,300) if quality=="Fast" else (600,600) if quality=="High" else (1000,1000)
+    min_res = (300,300) if quality=="Fast" else (600,600) if quality=="High" else (1000,1000)
 
 # Scraping Engine
 if st.button("🔥 IGNITE TURBO SCRAPE"):
-    # ... existing scraping logic ...
-    pass
+    if not query: st.toast("⚠️ Need a vision!")
+    else:
+        if query not in st.session_state.history: st.session_state.history.insert(0, query)
+        if not os.path.exists(out_dir): os.makedirs(out_dir)
+        st.session_state.files = []
+        
+        status = st.status(f"🚀 Turbo-Scraping {source}...")
+        driver = setup_driver()
+        
+        if driver:
+            try:
+                urls = {
+                    "Pinterest": f"https://www.pinterest.com/search/pins/?q={query.replace(' ', '%20')}",
+                    "Unsplash": f"https://unsplash.com/s/photos/{query.replace(' ', '-')}",
+                    "Pexels": f"https://www.pexels.com/search/{query}/",
+                    "Pixabay": f"https://pixabay.com/images/search/{query}/"
+                }
+                driver.get(urls[source])
+                time.sleep(2)
+                
+                found = set()
+                downloaded = 0
+                max_scrols = 40
+                
+                prog = status.progress(0, text="Establishing high-speed feed...")
+                preview_area = st.empty() if preview else None
+                
+                for scroll in range(max_scrols):
+                    if downloaded >= num: break
+                    images = driver.find_elements(By.TAG_NAME, "img")
+                    batch_urls = []
+                    
+                    for img in images:
+                        try:
+                            src = img.get_attribute("src") or img.get_attribute("data-src")
+                            if is_valid_image_url(src):
+                                # Fix blurred/sensitive content by resolving original URL
+                                if unlock: src = resolve_high_res(src, source)
+                                
+                                if src not in found:
+                                    found.add(src)
+                                    batch_urls.append(src)
+                        except: continue
+                    
+                    if batch_urls:
+                        with concurrent.futures.ThreadPoolExecutor(max_workers=8 if turbo else 1) as exe:
+                            futures = []
+                            for i, u in enumerate(batch_urls):
+                                if downloaded + len(futures) >= num: break
+                                name = f"{source}_{int(time.time())}_{downloaded+len(futures)}.jpg"
+                                futures.append(exe.submit(fast_download, u, out_dir, name, min_res))
+                            
+                            for f in concurrent.futures.as_completed(futures):
+                                res = f.result()
+                                if res:
+                                    downloaded += 1
+                                    st.session_state.files.append(res)
+                                    prog.progress(downloaded/num, text=f"Captured {downloaded}/{num} pins")
+                                    if preview:
+                                        with preview_area.container():
+                                            st.image(res, width=150)
+
+                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                    time.sleep(1.5)
+                
+                status.update(label=f"🎯 {downloaded} assets captured!", state="complete")
+                
+            except Exception as e:
+                status.update(label="❌ Error", state="error")
+                st.error(str(e))
+            finally: driver.quit()
 
 # Results Gallery
 if st.session_state.files:
     st.divider()
     st.subheader(f"📦 Collection ({len(st.session_state.files)})")
     
-    gc1, gc2, gc3 = st.columns([2, 1, 1])
-    with gc1: st.write("✅ All captured assets")
-    with gc2: 
-        if st.button("🔓 Deselect All"):
-            st.session_state.deselect_all = True
-            st.rerun()
-    with gc3:
+    gc1, gc2 = st.columns([3, 1])
+    with gc2:
         if st.button("🗑️ Clear"):
             st.session_state.files = []
             st.rerun()
-    
-    if 'deselect_all' not in st.session_state: st.session_state.deselect_all = False
     
     cols = st.columns(2)
     sel = []
     for i, p in enumerate(st.session_state.files):
         with cols[i%2]:
             st.image(p, use_container_width=True)
-            default_val = False if st.session_state.deselect_all else True
-            if st.checkbox("Add", key=f"s_{p}", value=default_val, label_visibility="collapsed"):
+            if st.checkbox("Add", key=f"s_{p}", value=True, label_visibility="collapsed"):
                 sel.append(p)
-    
-    # Reset deselect flag
-    st.session_state.deselect_all = False
     
     if sel:
         st.markdown('<div style="height:80px;"></div>', unsafe_allow_html=True)
         z_data = create_zip(sel)
-        st.download_button(f"⬇️ EXPORT {len(sel)} ASSETS (ZIP)", z_data, f"UltraScraper_{query.replace(' ', '_')}.zip", "application/zip", use_container_width=True, type="primary")
+        st.download_button(f"⬇️ DOWNLOAD {len(sel)} IMAGES", z_data, "Scraped_Assets.zip", "application/zip", use_container_width=True, type="primary")
