@@ -136,20 +136,41 @@ def resolve_high_res(url, source):
 
 def setup_driver(headless=True):
     chrome_options = Options()
-    if headless: chrome_options.add_argument('--headless')
+    if headless:
+        chrome_options.add_argument('--headless')
     chrome_options.add_argument('--no-sandbox')
     chrome_options.add_argument('--disable-dev-shm-usage')
+    chrome_options.add_argument('--disable-gpu')
     chrome_options.add_argument("--log-level=3")
-    # Add User-Agent to avoid some 'sensitive' gates
     chrome_options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36")
     
+    # Priority 1: System-installed Chromium (Common on Streamlit Cloud/Linux)
+    paths = [
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/usr/lib/chromium-browser/chromium-browser"
+    ]
+    for path in paths:
+        if os.path.exists(path):
+            chrome_options.binary_location = path
+            break
+            
+    driver_path = "/usr/bin/chromedriver"
+    if os.path.exists(driver_path):
+        try:
+            from selenium.webdriver.chrome.service import Service
+            service = Service(driver_path)
+            return webdriver.Chrome(service=service, options=chrome_options)
+        except: pass
+
+    # Priority 2: Webdriver Manager (Local/Other)
     try:
         from selenium.webdriver.chrome.service import Service
         from webdriver_manager.chrome import ChromeDriverManager
         service = Service(ChromeDriverManager().install())
         driver = webdriver.Chrome(service=service, options=chrome_options)
         return driver
-    except:
+    except Exception as e:
         return None
 
 def is_valid_image_url(url):
