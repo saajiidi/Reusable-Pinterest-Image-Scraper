@@ -118,15 +118,19 @@ def resolve_high_res(url, source):
     try:
         if source == "Pinterest":
             # Pinterest: thumbnails are usually in /236x/ or /736x/. Originals are in /originals/
-            # This often bypasses 'sensitive content' blurs applied to thumbnails
             if '/236x/' in url: return url.replace('/236x/', '/originals/')
             if '/736x/' in url: return url.replace('/736x/', '/originals/')
         elif source == "Unsplash":
-            # Unsplash: Remove image processing params to get raw source
             if '?' in url: return url.split('?')[0]
         elif source == "Pixabay":
-            # Pixabay: Replace _340 (thumbnail) with _1280 (high res)
             return url.replace('_340.', '_1280.')
+        elif source == "Imgur":
+            # Imgur: Remove thumbnail suffix (m, l, t, s)
+            import re
+            return re.sub(r'([a-zA-Z0-9]{5,})[slmth]\.', r'\1.', url)
+        elif source == "DeviantArt":
+            # DeviantArt: Target original path
+            if '/f/' in url: return url.split('?')[0]
     except: pass
     return url
 
@@ -189,12 +193,12 @@ with st.container():
 
 # Config Section
 with st.container():
-    source = st.selectbox("🌐 Network", ["Pinterest", "Unsplash", "Pexels", "Pixabay"])
-    query = st.text_input("🎯 Vision", value=st.session_state.query, placeholder="e.g. 8k Neon City")
+    source = st.selectbox("🌐 Network", ["Pinterest", "Unsplash", "Pexels", "Pixabay", "Imgur", "DeviantArt"])
+    query = st.text_input("🎯 Vision", value=st.session_state.query, placeholder="e.g. Romantic Aesthetic")
     num = st.slider("📸 Count", 5, 100, 20)
 
 # Quick Chips
-q_chips = ["Aesthetic", "Retro", "Minimal", "Nature", "Space", "Architecture"]
+q_chips = ["Romantic", "Dark Aesthetic", "Minimal", "Nature", "Space", "Lo-Fi"]
 st.write("🔥 **Hot Topics**")
 cols = st.columns(6)
 for i, c in enumerate(q_chips):
@@ -225,7 +229,9 @@ if st.button("🔥 IGNITE TURBO SCRAPE"):
                     "Pinterest": f"https://www.pinterest.com/search/pins/?q={query.replace(' ', '%20')}",
                     "Unsplash": f"https://unsplash.com/s/photos/{query.replace(' ', '-')}",
                     "Pexels": f"https://www.pexels.com/search/{query}/",
-                    "Pixabay": f"https://pixabay.com/images/search/{query}/"
+                    "Pixabay": f"https://pixabay.com/images/search/{query}/",
+                    "Imgur": f"https://imgur.com/search?q={query.replace(' ', '%20')}",
+                    "DeviantArt": f"https://www.deviantart.com/search?q={query.replace(' ', '%20')}"
                 }
                 driver.get(urls[source])
                 time.sleep(2)
