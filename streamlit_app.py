@@ -8,6 +8,7 @@ import requests
 import zipfile
 import concurrent.futures
 from datetime import datetime
+from urllib.parse import quote
 from io import BytesIO, StringIO
 from PIL import Image
 try:
@@ -258,6 +259,18 @@ def resolve_high_res(url, source):
         if source == "DeviantArt":
             if "/f/" in url:
                 return url.split("?")[0]
+        if source == "Flickr":
+            return re.sub(r"_([a-zA-Z])\\.jpg", r"_b.jpg", url)
+        if source == "Wallhaven":
+            m = re.search(r"wallhaven-([a-zA-Z0-9]+)\\.", url)
+            if m:
+                wid = m.group(1)
+                return f"https://w.wallhaven.cc/full/{wid[:2]}/wallhaven-{wid}.jpg"
+        if source == "Wikimedia Commons":
+            if "/thumb/" in url:
+                url = url.replace("/thumb/", "/")
+                url = re.sub(r"/\\d+px-[^/]+$", "", url)
+                return url
     except Exception:
         pass
     return url
@@ -330,6 +343,9 @@ def extract_image_urls(driver, source):
         "Pixabay": ["img[src*='cdn.pixabay.com']", "img[srcset*='cdn.pixabay.com']"],
         "Imgur": ["img[src*='i.imgur.com']", "img[srcset*='i.imgur.com']"],
         "DeviantArt": ["img[src*='wixmp.com']", "img[srcset*='wixmp.com']", "img[src*='deviantart']"],
+        "Flickr": ["img[src*='live.staticflickr.com']", "img[srcset*='live.staticflickr.com']"],
+        "Wallhaven": ["img[src*='w.wallhaven.cc']", "img[srcset*='w.wallhaven.cc']", "img[src*='th.wallhaven.cc']"],
+        "Wikimedia Commons": ["img[src*='upload.wikimedia.org']", "img[srcset*='upload.wikimedia.org']"],
     }
     urls = []
     fallback = ["img[src]", "img[srcset]"]
@@ -363,6 +379,12 @@ def extract_from_page_source(html, source):
         urls.extend(re.findall(r"https://i\\.imgur\\.com/[^\"\\s]+", html))
     if source == "DeviantArt":
         urls.extend(re.findall(r"https://[^\"\\s]*wixmp\\.com/[^\"\\s]+", html))
+    if source == "Flickr":
+        urls.extend(re.findall(r"https://live\\.staticflickr\\.com/[^\"\\s]+", html))
+    if source == "Wallhaven":
+        urls.extend(re.findall(r"https://[^\"\\s]*wallhaven\\.cc/[^\"\\s]+wallhaven-[^\"\\s]+", html))
+    if source == "Wikimedia Commons":
+        urls.extend(re.findall(r"https://upload\\.wikimedia\\.org/[^\"\\s]+", html))
     return urls
 
 
@@ -421,6 +443,9 @@ def scroll_delay(source, mode):
         "Pixabay": 1.2,
         "Imgur": 1.4,
         "DeviantArt": 2.0,
+        "Flickr": 1.6,
+        "Wallhaven": 1.4,
+        "Wikimedia Commons": 1.6,
     }.get(source, 1.4)
     if mode == "Gentle":
         return base * 1.6
@@ -496,7 +521,7 @@ def metadata_to_csv(metadata):
 
 
 def url_map(query, source):
-    encoded = query.replace(" ", "%20")
+    encoded = quote(query)
     dashed = query.replace(" ", "-")
     return {
         "Pinterest": f"https://www.pinterest.com/search/pins/?q={encoded}",
@@ -505,6 +530,9 @@ def url_map(query, source):
         "Pixabay": f"https://pixabay.com/images/search/{query}/",
         "Imgur": f"https://imgur.com/search?q={encoded}",
         "DeviantArt": f"https://www.deviantart.com/search?q={encoded}",
+        "Flickr": f"https://www.flickr.com/search/?text={encoded}",
+        "Wallhaven": f"https://wallhaven.cc/search?q={encoded}",
+        "Wikimedia Commons": f"https://commons.wikimedia.org/w/index.php?search={encoded}&title=Special:MediaSearch&type=image",
     }[source]
 
 
@@ -558,7 +586,17 @@ with st.container():
 with st.container():
     sources = st.multiselect(
         "Image sources",
-        ["Pinterest", "Unsplash", "Pexels", "Pixabay", "Imgur", "DeviantArt"],
+        [
+            "Pinterest",
+            "Unsplash",
+            "Pexels",
+            "Pixabay",
+            "Imgur",
+            "DeviantArt",
+            "Flickr",
+            "Wallhaven",
+            "Wikimedia Commons",
+        ],
         default=["Pinterest"],
     )
     query = st.text_input(

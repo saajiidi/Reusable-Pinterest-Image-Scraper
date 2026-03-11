@@ -4,7 +4,7 @@ A reusable, multi-source image scraper with a modern Streamlit UI. Scrape images
 
 ## Features
 
-- Multi-source scraping: Pinterest, Unsplash, Pexels, Pixabay, Imgur, DeviantArt
+- Multi-source scraping: Pinterest, Unsplash, Pexels, Pixabay, Imgur, DeviantArt, Flickr, Wallhaven, Wikimedia Commons
 - Quality filters: minimum resolution, file size, orientation, and file type
 - Perceptual dedupe to avoid near-duplicates
 - Live preview + progress tracking
