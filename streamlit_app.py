@@ -1,4 +1,4 @@
-﻿import streamlit as st
+import streamlit as st
 import os
 import re
 import time
@@ -7,7 +7,8 @@ import csv
 import requests
 import zipfile
 import concurrent.futures
-from datetime import datetime
+from datetime import datetime, timezone
+import threading
 from urllib.parse import quote
 from io import BytesIO, StringIO
 from PIL import Image
@@ -19,6 +20,7 @@ except Exception:
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+from telegram_bot import TelegramBotManager, load_telegram_config, save_telegram_config
 
 # Page configuration - Mobile optimized
 st.set_page_config(
@@ -260,16 +262,16 @@ def resolve_high_res(url, source):
             if "/f/" in url:
                 return url.split("?")[0]
         if source == "Flickr":
-            return re.sub(r"_([a-zA-Z])\\.jpg", r"_b.jpg", url)
+            return re.sub(r"_([a-zA-Z])\.jpg", r"_b.jpg", url)
         if source == "Wallhaven":
-            m = re.search(r"wallhaven-([a-zA-Z0-9]+)\\.", url)
+            m = re.search(r"wallhaven-([a-zA-Z0-9]+)\.", url)
             if m:
                 wid = m.group(1)
                 return f"https://w.wallhaven.cc/full/{wid[:2]}/wallhaven-{wid}.jpg"
         if source == "Wikimedia Commons":
             if "/thumb/" in url:
                 url = url.replace("/thumb/", "/")
-                url = re.sub(r"/\\d+px-[^/]+$", "", url)
+                url = re.sub(r"/\d+px-[^/]+$", "", url)
                 return url
     except Exception:
         pass
@@ -368,23 +370,23 @@ def extract_from_page_source(html, source):
     if not html:
         return urls
     if source == "Pinterest":
-        urls.extend(re.findall(r"https://i\\.pinimg\\.com/originals/[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://i\.pinimg\.com/originals/[^\"\s]+", html))
     if source == "Unsplash":
-        urls.extend(re.findall(r"https://images\\.unsplash\\.com/[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://images\.unsplash\.com/[^\"\s]+", html))
     if source == "Pexels":
-        urls.extend(re.findall(r"https://images\\.pexels\\.com/[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://images\.pexels\.com/[^\"\s]+", html))
     if source == "Pixabay":
-        urls.extend(re.findall(r"https://cdn\\.pixabay\\.com/[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://cdn\.pixabay\.com/[^\"\s]+", html))
     if source == "Imgur":
-        urls.extend(re.findall(r"https://i\\.imgur\\.com/[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://i\.imgur\.com/[^\"\s]+", html))
     if source == "DeviantArt":
-        urls.extend(re.findall(r"https://[^\"\\s]*wixmp\\.com/[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://[^\"\s]*wixmp\.com/[^\"\s]+", html))
     if source == "Flickr":
-        urls.extend(re.findall(r"https://live\\.staticflickr\\.com/[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://live\.staticflickr\.com/[^\"\s]+", html))
     if source == "Wallhaven":
-        urls.extend(re.findall(r"https://[^\"\\s]*wallhaven\\.cc/[^\"\\s]+wallhaven-[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://[^\"\s]*wallhaven\.cc/[^\"\s]+wallhaven-[^\"\s]+", html))
     if source == "Wikimedia Commons":
-        urls.extend(re.findall(r"https://upload\\.wikimedia\\.org/[^\"\\s]+", html))
+        urls.extend(re.findall(r"https://upload\.wikimedia\.org/[^\"\s]+", html))
     return urls
 
 
@@ -396,6 +398,7 @@ def request_with_retry(session, url, max_retries=3):
             response = session.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=(5, 12))
             if response.status_code in (429, 500, 502, 503, 504):
                 retries += 1
+                last_error = f"HTTP {response.status_code}"
                 time.sleep(1.2 * (2 ** attempt))
                 continue
             return response, retries
@@ -454,7 +457,11 @@ def scroll_delay(source, mode):
     return base
 
 
+HASH_LOCK = threading.Lock()
+
+
 def fast_download(session, url, folder, name, min_size, min_bytes, allow_types, orientation, hash_list):
+    retries = 0
     try:
         response, retries = request_with_retry(session, url, max_retries=3)
         if response.status_code != 200:
@@ -479,9 +486,10 @@ def fast_download(session, url, folder, name, min_size, min_bytes, allow_types, 
         phash = None
         if IMAGEHASH_AVAILABLE:
             phash = imagehash.phash(img)
-            if any((phash - h) <= 5 for h in hash_list):
-                return None, "perceptual_duplicate", retries
-            hash_list.append(phash)
+            with HASH_LOCK:
+                if any((phash - h) <= 5 for h in hash_list):
+                    return None, "perceptual_duplicate", retries
+                hash_list.append(phash)
         path = os.path.join(folder, name + ext)
         with open(path, "wb") as f:
             f.write(response.content)
@@ -497,7 +505,7 @@ def fast_download(session, url, folder, name, min_size, min_bytes, allow_types, 
         }
         return meta, "ok", retries
     except Exception:
-        return None, "error", 0
+        return None, "error", retries
 
 
 def create_zip(file_paths):
@@ -536,6 +544,189 @@ def url_map(query, source):
     }[source]
 
 
+def run_scraping_job(
+    query,
+    count=40,
+    sources=None,
+    out_dir=None,
+    turbo=True,
+    unlock=True,
+    min_res=(600, 600),
+    min_bytes=120 * 1024,
+    orientation="Any",
+    allow_types=None,
+    rate_mode="Normal",
+    use_url_cache=True,
+    resume_last=False,
+    progress_cb=None,
+    cancel_check=None,
+):
+    if not sources:
+        sources = ["Pinterest"]
+    if not allow_types:
+        allow_types = ["jpeg", "png", "webp"]
+    if not out_dir:
+        out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "UltraScraper")
+    os.makedirs(out_dir, exist_ok=True)
+
+    driver = setup_driver()
+    if not driver:
+        raise RuntimeError("ChromeDriver not available. Check your browser driver setup.")
+
+    files = []
+    metadata = []
+    errors = []
+    attempted = 0
+    downloaded = 0
+    retried = 0
+    total_requests = 0
+    run_started_at = time.time()
+    skipped = {
+        "bad_status": 0,
+        "too_small": 0,
+        "low_res": 0,
+        "wrong_orientation": 0,
+        "type_filtered": 0,
+        "perceptual_duplicate": 0,
+        "error": 0,
+    }
+
+    try:
+        session = requests.Session()
+        found = set()
+        hash_list = []
+        url_cache = load_url_cache() if use_url_cache else set()
+        if url_cache:
+            found.update(url_cache)
+
+        if resume_last:
+            prior = load_last_metadata()
+            for item in prior:
+                url = item.get("url")
+                if url:
+                    found.add(url)
+                hash_str = item.get("hash")
+                if hash_str and IMAGEHASH_AVAILABLE:
+                    try:
+                        hash_list.append(imagehash.hex_to_hash(hash_str))
+                    except Exception:
+                        pass
+            metadata.extend(prior)
+            files.extend([m.get("path") for m in prior if m.get("path") and os.path.exists(m.get("path"))])
+            downloaded = len([p for p in files if p])
+
+        for source in sources:
+            if downloaded >= count or (cancel_check and cancel_check()):
+                break
+
+            driver.get(url_map(query, source))
+            time.sleep(2)
+
+            max_scrolls = 40
+            for _ in range(max_scrolls):
+                if downloaded >= count or (cancel_check and cancel_check()):
+                    break
+
+                batch_urls = []
+                for src in extract_image_urls(driver, source):
+                    if unlock:
+                        src = resolve_high_res(src, source)
+                    if src not in found and is_valid_image_url(src):
+                        found.add(src)
+                        batch_urls.append(src)
+                page_urls = extract_from_page_source(driver.page_source, source)
+                for src in page_urls:
+                    if unlock:
+                        src = resolve_high_res(src, source)
+                    if src not in found and is_valid_image_url(src):
+                        found.add(src)
+                        batch_urls.append(src)
+
+                if batch_urls:
+                    max_workers = 8 if turbo else 1
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as exe:
+                        future_map = {}
+                        for i, u in enumerate(batch_urls):
+                            if downloaded + len(future_map) >= count:
+                                break
+                            name = f"{slugify(query)}_{source.lower()}_{int(time.time())}_{downloaded+len(future_map)}"
+                            future_map[
+                                exe.submit(
+                                    fast_download,
+                                    session,
+                                    u,
+                                    out_dir,
+                                    name,
+                                    min_res,
+                                    min_bytes,
+                                    [t.lower() for t in allow_types],
+                                    orientation,
+                                    hash_list,
+                                )
+                            ] = u
+
+                        for f in concurrent.futures.as_completed(future_map):
+                            if cancel_check and cancel_check():
+                                break
+                            attempted += 1
+                            meta, reason, retries_cnt = f.result()
+                            retried += retries_cnt
+                            total_requests += 1
+                            if meta:
+                                downloaded += 1
+                                meta.update(
+                                    {
+                                        "query": query,
+                                        "source": source,
+                                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                                    }
+                                )
+                                if use_url_cache and meta.get("url"):
+                                    url_cache.add(meta.get("url"))
+                                files.append(meta.get("path"))
+                                metadata.append(meta)
+                                if progress_cb:
+                                    progress_cb(downloaded, count, meta.get("path"))
+                            else:
+                                skipped[reason] = skipped.get(reason, 0) + 1
+
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(scroll_delay(source, rate_mode))
+
+    except Exception as e:
+        errors.append(str(e))
+    finally:
+        driver.quit()
+
+    if use_url_cache:
+        save_url_cache(url_cache)
+    save_last_metadata(metadata)
+    if errors:
+        save_errors(errors)
+
+    zip_path = None
+    if files:
+        zip_bytes = create_zip(files)
+        zip_path = os.path.join(out_dir, f"{slugify(query)}_scraped.zip")
+        with open(zip_path, "wb") as zf:
+            zf.write(zip_bytes)
+
+    return {
+        "files": files,
+        "metadata": metadata,
+        "errors": errors,
+        "zip_path": zip_path,
+        "stats": {
+            "downloaded": downloaded,
+            "attempted": attempted,
+            "skipped": skipped,
+            "retried": retried,
+            "total_requests": total_requests,
+            "duration_sec": round(time.time() - run_started_at, 1),
+        },
+    }
+
+
 # Session State
 if "files" not in st.session_state:
     st.session_state.files = []
@@ -553,6 +744,12 @@ if "out_dir" not in st.session_state:
     st.session_state.out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "UltraScraper")
 if "last_stats" not in st.session_state:
     st.session_state.last_stats = {}
+if "telegram_bot" not in st.session_state:
+    bot_mgr = TelegramBotManager(scraper_runner=run_scraping_job)
+    st.session_state.telegram_bot = bot_mgr
+    cfg = load_telegram_config()
+    if cfg.get("enabled") and cfg.get("token"):
+        bot_mgr.start()
 
 # Header
 st.markdown(
@@ -601,8 +798,8 @@ with st.container():
     )
     query = st.text_input(
         "Search query",
-        value=st.session_state.query,
         placeholder="e.g. Romantic Aesthetic",
+        key="query",
     )
     num = st.slider("Image count", 5, 200, 40)
 
@@ -686,6 +883,63 @@ with st.expander("Maintenance"):
         else:
             st.warning("Thumbnail cache not found.")
 
+with st.expander("🤖 Telegram Bot Integration"):
+    tg_config = load_telegram_config()
+    bot_mgr = st.session_state.telegram_bot
+
+    t1, t2 = st.columns([3, 1])
+    with t1:
+        new_token = st.text_input(
+            "Telegram Bot Token",
+            value=tg_config.get("token", ""),
+            type="password",
+            help="Obtain from @BotFather on Telegram",
+            key="tg_token_input",
+        )
+    with t2:
+        if st.button("Save Token"):
+            tg_config["token"] = new_token.strip()
+            save_telegram_config(tg_config)
+            bot_mgr.config = tg_config
+            st.success("Token saved!")
+
+    allowed_chats_str = st.text_input(
+        "Allowed Chat IDs (optional, comma-separated)",
+        value=", ".join(map(str, tg_config.get("allowed_chat_ids", []))),
+        help="Leave empty for open access, or specify allowed Telegram Chat IDs",
+        key="tg_chats_input",
+    )
+    if st.button("Save Allowed Chat IDs"):
+        raw_ids = [c.strip() for c in allowed_chats_str.split(",") if c.strip()]
+        tg_config["allowed_chat_ids"] = raw_ids
+        save_telegram_config(tg_config)
+        bot_mgr.config = tg_config
+        st.success("Allowed Chat IDs saved!")
+
+    b1, b2, b3 = st.columns([1.5, 1.5, 3])
+    with b1:
+        if st.button("🚀 Start Bot Daemon", disabled=bot_mgr.is_running):
+            if bot_mgr.start():
+                st.success("Bot started!")
+                st.rerun()
+            else:
+                st.error("Failed to start bot. Check token.")
+    with b2:
+        if st.button("🛑 Stop Bot Daemon", disabled=not bot_mgr.is_running):
+            bot_mgr.stop()
+            st.info("Bot daemon stopped.")
+            st.rerun()
+    with b3:
+        if bot_mgr.is_running:
+            handle = bot_mgr.bot_info.get("username", "Bot")
+            st.markdown(f"🟢 **Status:** Active (`@{handle}`)")
+        else:
+            st.markdown("🔴 **Status:** Stopped")
+
+    if bot_mgr.logs:
+        st.caption("Recent Telegram Activity Logs:")
+        st.code("\n".join(bot_mgr.logs[-10:]))
+
 # Run
 run_disabled = (not query.strip()) or (not sources)
 run_button = st.button("Start scraping", disabled=run_disabled)
@@ -700,164 +954,51 @@ if run_button:
             st.session_state.history.insert(0, query)
             save_history(st.session_state.history)
 
-        if not os.path.exists(st.session_state.out_dir):
-            os.makedirs(st.session_state.out_dir, exist_ok=True)
-
         st.session_state.files = []
         st.session_state.metadata = []
         st.session_state.errors = []
 
         status = st.status(f"Scraping {', '.join(sources)}...", expanded=True)
-        driver = setup_driver()
+        prog = status.progress(0, text="Starting...")
+        preview_area = st.empty() if preview else None
 
-        if driver:
-            session = requests.Session()
-            found = set()
-            hash_list = []
-            url_cache = load_url_cache() if use_url_cache else set()
-            if url_cache:
-                found.update(url_cache)
+        def ui_progress_cb(current, total, path):
+            prog.progress(min(current / total, 1.0), text=f"Downloaded {current}/{total}")
+            if preview and path:
+                with preview_area.container():
+                    st.image(get_thumbnail(path), width=160)
 
-            if resume_last:
-                prior = load_last_metadata()
-                for item in prior:
-                    url = item.get("url")
-                    if url:
-                        found.add(url)
-                    hash_str = item.get("hash")
-                    if hash_str and IMAGEHASH_AVAILABLE:
-                        try:
-                            hash_list.append(imagehash.hex_to_hash(hash_str))
-                        except Exception:
-                            pass
-                st.session_state.metadata.extend(prior)
-                st.session_state.files.extend(
-                    [m.get("path") for m in prior if m.get("path") and os.path.exists(m.get("path"))]
-                )
+        try:
+            result = run_scraping_job(
+                query=query,
+                count=num,
+                sources=sources,
+                out_dir=st.session_state.out_dir,
+                turbo=turbo,
+                unlock=unlock,
+                min_res=min_res,
+                min_bytes=min_bytes,
+                orientation=orientation,
+                allow_types=allow_types,
+                rate_mode=rate_mode,
+                use_url_cache=use_url_cache,
+                resume_last=resume_last,
+                progress_cb=ui_progress_cb,
+            )
 
-            downloaded = len([p for p in st.session_state.files if p])
-            attempted = 0
-            skipped = {
-                "bad_status": 0,
-                "too_small": 0,
-                "low_res": 0,
-                "wrong_orientation": 0,
-                "type_filtered": 0,
-                "perceptual_duplicate": 0,
-                "error": 0,
-            }
-            retried = 0
-            total_requests = 0
-            run_started_at = time.time()
+            st.session_state.files = result["files"]
+            st.session_state.metadata = result["metadata"]
+            st.session_state.errors = result["errors"]
+            st.session_state.last_stats = result["stats"]
 
-            try:
-                prog = status.progress(0, text="Starting...")
-                preview_area = st.empty() if preview else None
-
-                for source in sources:
-                    if downloaded >= num:
-                        break
-
-                    driver.get(url_map(query, source))
-                    time.sleep(2)
-
-                    max_scrolls = 40
-                    for _ in range(max_scrolls):
-                        if downloaded >= num:
-                            break
-
-                        batch_urls = []
-                        for src in extract_image_urls(driver, source):
-                            if unlock:
-                                src = resolve_high_res(src, source)
-                            if src not in found and is_valid_image_url(src):
-                                found.add(src)
-                                batch_urls.append(src)
-                        page_urls = extract_from_page_source(driver.page_source, source)
-                        for src in page_urls:
-                            if unlock:
-                                src = resolve_high_res(src, source)
-                            if src not in found and is_valid_image_url(src):
-                                found.add(src)
-                                batch_urls.append(src)
-
-                        if batch_urls:
-                            max_workers = 8 if turbo else 1
-                            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as exe:
-                                future_map = {}
-                                for i, u in enumerate(batch_urls):
-                                    if downloaded + len(future_map) >= num:
-                                        break
-                                    name = f"{slugify(query)}_{source.lower()}_{int(time.time())}_{downloaded+len(future_map)}"
-                                    future_map[exe.submit(
-                                        fast_download,
-                                        session,
-                                        u,
-                                        st.session_state.out_dir,
-                                        name,
-                                        min_res,
-                                        min_bytes,
-                                        [t.lower() for t in allow_types],
-                                        orientation,
-                                        hash_list,
-                                    )] = u
-
-                                for f in concurrent.futures.as_completed(future_map):
-                                    attempted += 1
-                                    meta, reason, retries = f.result()
-                                    retried += retries
-                                    total_requests += 1
-                                    if meta:
-                                        downloaded += 1
-                                        meta.update(
-                                            {
-                                                "query": query,
-                                                "source": source,
-                                                "timestamp": datetime.utcnow().isoformat() + "Z",
-                                            }
-                                        )
-                                        if use_url_cache and meta.get("url"):
-                                            url_cache.add(meta.get("url"))
-                                        st.session_state.files.append(meta.get("path"))
-                                        st.session_state.metadata.append(meta)
-
-                                        prog.progress(downloaded / num, text=f"Downloaded {downloaded}/{num}")
-                                        if preview and meta.get("path"):
-                                            with preview_area.container():
-                                                st.image(get_thumbnail(meta.get("path")), width=160)
-                                    else:
-                                        skipped[reason] = skipped.get(reason, 0) + 1
-
-                        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(scroll_delay(source, rate_mode))
-
-                status.update(
-                    label=f"Completed: {downloaded} downloaded, {attempted - downloaded} skipped",
-                    state="complete",
-                )
-                st.session_state.last_stats = {
-                    "downloaded": downloaded,
-                    "attempted": attempted,
-                    "skipped": skipped,
-                    "retried": retried,
-                    "total_requests": total_requests,
-                    "duration_sec": round(time.time() - run_started_at, 1),
-                }
-
-            except Exception as e:
-                st.session_state.errors.append(str(e))
-                status.update(label="Error during scraping", state="error")
-                st.error(str(e))
-            finally:
-                driver.quit()
-
-            save_last_metadata(st.session_state.metadata)
-            if use_url_cache:
-                save_url_cache(url_cache)
-            if st.session_state.errors:
-                save_errors(st.session_state.errors)
-        else:
-            st.error("ChromeDriver not available. Check your browser driver setup.")
+            status.update(
+                label=f"Completed: {result['stats']['downloaded']} downloaded, {result['stats']['attempted'] - result['stats']['downloaded']} skipped",
+                state="complete",
+            )
+        except Exception as e:
+            st.session_state.errors.append(str(e))
+            status.update(label="Error during scraping", state="error")
+            st.error(str(e))
 
 # Results Summary
 if st.session_state.metadata:

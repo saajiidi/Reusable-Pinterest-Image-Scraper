@@ -1,4 +1,4 @@
-﻿# Pinterest Image Scraper (Streamlit)
+# Pinterest Image Scraper (Streamlit)
 
 A reusable, multi-source image scraper with a modern Streamlit UI. Scrape images from Pinterest and other sources with quality filters, live preview, and exportable metadata.
 
@@ -6,6 +6,7 @@ A reusable, multi-source image scraper with a modern Streamlit UI. Scrape images
 
 - Multi-source scraping: Pinterest, Unsplash, Pexels, Pixabay, Imgur, DeviantArt, Flickr, Wallhaven, Wikimedia Commons
 - Quality filters: minimum resolution, file size, orientation, and file type
+- Integrated Telegram Bot daemon (`/scrape`, `/status`, `/help`, preview photos & ZIP delivery)
 - Perceptual dedupe to avoid near-duplicates
 - Live preview + progress tracking
 - Export metadata to JSON/CSV
@@ -20,7 +21,8 @@ A reusable, multi-source image scraper with a modern Streamlit UI. Scrape images
 
 ## Project Structure
 
-- `streamlit_app.py` - Main Streamlit app
+- `streamlit_app.py` - Main Streamlit web application & scraper engine
+- `telegram_bot.py` - Background Telegram Bot daemon module
 - `manifest.json` - PWA metadata
 - `requirements.txt` - Python dependencies
 - `packages.txt` - System packages (for hosted environments)
