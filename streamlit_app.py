@@ -590,6 +590,9 @@ def run_scraping_job(
     retried = 0
     total_requests = 0
     run_started_at = time.time()
+    url_cache = load_url_cache() if use_url_cache else set()
+    found = set(url_cache) if url_cache else set()
+    hash_list = []
     skipped = {
         "bad_status": 0,
         "too_small": 0,
@@ -606,11 +609,6 @@ def run_scraping_job(
             raise RuntimeError("ChromeDriver not available. Check your browser driver setup.")
 
         session = requests.Session()
-        found = set()
-        hash_list = []
-        url_cache = load_url_cache() if use_url_cache else set()
-        if url_cache:
-            found.update(url_cache)
 
         if resume_last:
             prior = load_last_metadata()
@@ -771,7 +769,12 @@ def get_telegram_bot_manager():
         manager.start()
     return manager
 
-st.session_state.telegram_bot = get_telegram_bot_manager()
+bot_mgr = get_telegram_bot_manager()
+if not bot_mgr.is_running:
+    cfg = load_telegram_config()
+    if cfg.get("enabled") and cfg.get("token"):
+        bot_mgr.start()
+st.session_state.telegram_bot = bot_mgr
 
 # Header
 st.markdown(
@@ -921,9 +924,13 @@ with st.expander("🤖 Telegram Bot Integration"):
     with t2:
         if st.button("Save Token"):
             tg_config["token"] = new_token.strip()
+            tg_config["enabled"] = True
             save_telegram_config(tg_config)
             bot_mgr.config = tg_config
-            st.success("Token saved!")
+            if not bot_mgr.is_running:
+                bot_mgr.start()
+            st.success("Token saved and bot started!")
+            st.rerun()
 
     allowed_chats_str = st.text_input(
         "Allowed Chat IDs (optional, comma-separated)",

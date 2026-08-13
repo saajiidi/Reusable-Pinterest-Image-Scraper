@@ -377,3 +377,20 @@ class TelegramBotManager:
         finally:
             with self.lock:
                 self.active_jobs_count = max(0, self.active_jobs_count - 1)
+
+if __name__ == "__main__":
+    from streamlit_app import run_scraping_job
+    print("🤖 Starting Ultra Scraper Telegram Bot daemon...")
+    bot = TelegramBotManager(scraper_runner=run_scraping_job)
+    if bot.start():
+        username = bot.bot_info.get("username", "Bot")
+        print(f"✅ Bot is active and listening as @{username}!")
+        print("Press Ctrl+C to stop.")
+        try:
+            while True:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            bot.stop()
+            print("Bot daemon stopped.")
+    else:
+        print("❌ Failed to start bot. Please ensure your token is configured in telegram_config.json.")
