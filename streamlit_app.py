@@ -22,110 +22,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 from telegram_bot import TelegramBotManager, load_telegram_config, save_telegram_config
 
-# Page configuration - Mobile optimized
-st.set_page_config(
-    page_title="Ultra Scraper Turbo",
-    page_icon="S",
-    layout="centered",
-    initial_sidebar_state="collapsed",
-)
-
-# PWA Support
-st.markdown(
-    """
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#E60023">
-<meta name="apple-mobile-web-app-capable" content="yes">
-""",
-    unsafe_allow_html=True,
-)
-
-# Custom CSS
-st.markdown(
-    """
-<style>
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
-
-    html, body, [data-testid="stAppViewContainer"] {
-        font-family: 'Outfit', sans-serif;
-        background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
-        color: #1a202c;
-    }
-
-    .stMainBlockContainer {
-        background: rgba(255, 255, 255, 0.95);
-        backdrop-filter: blur(18px);
-        border-radius: 32px;
-        border: 1px solid rgba(255, 255, 255, 0.6);
-        box-shadow: 0 20px 40px rgba(230, 0, 35, 0.12);
-        padding: 1.5rem !important;
-        margin-top: 1rem;
-    }
-
-    .main-title {
-        font-size: 2.1rem;
-        font-weight: 800;
-        background: linear-gradient(to right, #E60023, #ff4d6d);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        text-align: center;
-        margin-bottom: 0.2rem;
-    }
-
-    .status-badge {
-        display: inline-block;
-        padding: 2px 10px;
-        background: #B0001B;
-        color: white;
-        border-radius: 10px;
-        font-size: 0.7rem;
-        font-weight: 700;
-        vertical-align: middle;
-        margin-left: 5px;
-    }
-
-    .stButton>button {
-        width: 100%;
-        background: linear-gradient(135deg, #E60023 0%, #ff4d6d 100%);
-        color: white;
-        border: none;
-        border-radius: 18px;
-        font-weight: 700;
-        padding: 0.8rem;
-        transition: all 0.25s ease;
-    }
-
-    .stButton>button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 20px rgba(230, 0, 35, 0.25);
-        color: white;
-    }
-
-    [data-testid="stVerticalBlock"] > div:has(img) {
-        background: white;
-        padding: 8px;
-        border-radius: 16px;
-        border: 1px solid #fecaca;
-        transition: all 0.25s;
-    }
-
-    .card {
-        background: white;
-        border: 1px solid #fde2e2;
-        border-radius: 16px;
-        padding: 12px 14px;
-        margin: 8px 0 14px 0;
-    }
-
-    .muted {
-        color: #4a5568;
-        font-size: 0.9rem;
-    }
-</style>
-""",
-    unsafe_allow_html=True,
-)
-
 # Constants
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 APP_DIR = os.path.join(BASE_DIR, ".scraper_data")
@@ -524,11 +420,6 @@ def create_zip(file_paths):
     return buf.getvalue()
 
 
-@st.cache_data(show_spinner=False)
-def get_cached_zip(file_paths: tuple) -> bytes:
-    return create_zip(list(file_paths))
-
-
 def metadata_to_csv(metadata):
     if not metadata:
         return ""
@@ -742,365 +633,479 @@ def run_scraping_job(
     }
 
 
-# Session State
-if "files" not in st.session_state:
-    st.session_state.files = []
-if "metadata" not in st.session_state:
-    st.session_state.metadata = []
-if "query" not in st.session_state:
-    st.session_state.query = ""
-if "history" not in st.session_state:
-    st.session_state.history = load_history()
-if "errors" not in st.session_state:
-    st.session_state.errors = []
-if "select_all" not in st.session_state:
-    st.session_state.select_all = True
-if "out_dir" not in st.session_state:
-    st.session_state.out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "UltraScraper")
-if "last_stats" not in st.session_state:
-    st.session_state.last_stats = {}
+def main_ui():
+    # Page configuration - Mobile optimized
+    st.set_page_config(
+        page_title="Ultra Scraper Turbo",
+        page_icon="S",
+        layout="centered",
+        initial_sidebar_state="collapsed",
+    )
 
-# Telegram Bot Singleton across sessions
-@st.cache_resource
-def get_telegram_bot_manager():
-    manager = TelegramBotManager(scraper_runner=run_scraping_job)
-    cfg = load_telegram_config()
-    if cfg.get("enabled") and cfg.get("token"):
-        manager.start()
-    return manager
-
-bot_mgr = get_telegram_bot_manager()
-if not bot_mgr.is_running:
-    cfg = load_telegram_config()
-    if cfg.get("enabled") and cfg.get("token"):
-        bot_mgr.start()
-st.session_state.telegram_bot = bot_mgr
-
-# Header
-st.markdown(
-    "<h1 class='main-title'>Ultra Scraper <span class='status-badge'>TURBO</span></h1>",
-    unsafe_allow_html=True,
-)
-if not IMAGEHASH_AVAILABLE:
-    st.warning("imagehash is not installed. Perceptual dedupe is disabled.")
-
-st.markdown(
-    """
-    <div class="card">
-        <strong>3 steps to scrape:</strong>
-        <div class="muted">1) Choose sources  -  2) Enter your query  -  3) Set count + quality</div>
-    </div>
+    # PWA Support
+    st.markdown(
+        """
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#E60023">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     """,
-    unsafe_allow_html=True,
-)
-
-# Performance Controls
-with st.container():
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        turbo = st.checkbox("Turbo mode", value=True, help="Faster parallel downloads")
-    with c2:
-        preview = st.checkbox("Live preview", value=True)
-    with c3:
-        unlock = st.checkbox("Bypass blur", value=True, help="Resolve original high-res URLs")
-
-# Config Section
-with st.container():
-    sources = st.multiselect(
-        "Image sources",
-        [
-            "Pinterest",
-            "Unsplash",
-            "Pexels",
-            "Pixabay",
-            "Imgur",
-            "DeviantArt",
-            "Flickr",
-            "Wallhaven",
-            "Wikimedia Commons",
-        ],
-        default=["Pinterest"],
+        unsafe_allow_html=True,
     )
-    query = st.text_input(
-        "Search query",
-        placeholder="e.g. Romantic Aesthetic",
-        key="query",
+
+    # Custom CSS
+    st.markdown(
+        """
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+
+        html, body, [data-testid="stAppViewContainer"] {
+            font-family: 'Outfit', sans-serif;
+            background: linear-gradient(135deg, #fff5f5 0%, #fed7d7 100%);
+            color: #1a202c;
+        }
+
+        .stMainBlockContainer {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(18px);
+            border-radius: 32px;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 20px 40px rgba(230, 0, 35, 0.12);
+            padding: 1.5rem !important;
+            margin-top: 1rem;
+        }
+
+        .main-title {
+            font-size: 2.1rem;
+            font-weight: 800;
+            background: linear-gradient(to right, #E60023, #ff4d6d);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            margin-bottom: 0.2rem;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            background: #B0001B;
+            color: white;
+            border-radius: 10px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            vertical-align: middle;
+            margin-left: 5px;
+        }
+
+        .stButton>button {
+            width: 100%;
+            background: linear-gradient(135deg, #E60023 0%, #ff4d6d 100%);
+            color: white;
+            border: none;
+            border-radius: 18px;
+            font-weight: 700;
+            padding: 0.8rem;
+            transition: all 0.25s ease;
+        }
+
+        .stButton>button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(230, 0, 35, 0.25);
+            color: white;
+        }
+
+        [data-testid="stVerticalBlock"] > div:has(img) {
+            background: white;
+            padding: 8px;
+            border-radius: 16px;
+            border: 1px solid #fecaca;
+            transition: all 0.25s;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #fde2e2;
+            border-radius: 16px;
+            padding: 12px 14px;
+            margin: 8px 0 14px 0;
+        }
+
+        .muted {
+            color: #4a5568;
+            font-size: 0.9rem;
+        }
+    </style>
+    """,
+        unsafe_allow_html=True,
     )
-    num = st.slider("Image count", 5, 200, 40)
 
-# Quick Chips
-q_chips = ["Romantic", "Dark Aesthetic", "Minimal", "Nature", "Space", "Lo-Fi"]
-st.write("Hot topics")
-cols = st.columns(6)
-for i, c in enumerate(q_chips):
-    if cols[i].button(c, key=f"q_{i}"):
-        st.session_state.query = c
-        st.rerun()
+    # Session State
+    if "files" not in st.session_state:
+        st.session_state.files = []
+    if "metadata" not in st.session_state:
+        st.session_state.metadata = []
+    if "query" not in st.session_state:
+        st.session_state.query = ""
+    if "history" not in st.session_state:
+        st.session_state.history = load_history()
+    if "errors" not in st.session_state:
+        st.session_state.errors = []
+    if "select_all" not in st.session_state:
+        st.session_state.select_all = True
+    if "out_dir" not in st.session_state:
+        st.session_state.out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "UltraScraper")
+    if "last_stats" not in st.session_state:
+        st.session_state.last_stats = {}
 
-# Recent history
-if st.session_state.history:
-    st.write("Recent searches")
-    h_cols = st.columns(4)
-    for i, h in enumerate(st.session_state.history[:8]):
-        if h_cols[i % 4].button(h, key=f"h_{i}"):
-            st.session_state.query = h
-            st.rerun()
-else:
+    # Telegram Bot Singleton across sessions
+    @st.cache_resource
+    def get_telegram_bot_manager():
+        manager = TelegramBotManager(scraper_runner=run_scraping_job)
+        cfg = load_telegram_config()
+        if cfg.get("enabled") and cfg.get("token"):
+            manager.start()
+        return manager
+
+    bot_mgr = get_telegram_bot_manager()
+    if not bot_mgr.is_running:
+        cfg = load_telegram_config()
+        if cfg.get("enabled") and cfg.get("token"):
+            bot_mgr.start()
+    st.session_state.telegram_bot = bot_mgr
+
+    # Header
+    st.markdown(
+        "<h1 class='main-title'>Ultra Scraper <span class='status-badge'>TURBO</span></h1>",
+        unsafe_allow_html=True,
+    )
+    if not IMAGEHASH_AVAILABLE:
+        st.warning("imagehash is not installed. Perceptual dedupe is disabled.")
+
     st.markdown(
         """
         <div class="card">
-            <strong>No recent searches.</strong>
-            <div class="muted">Your recent queries will appear here.</div>
+            <strong>3 steps to scrape:</strong>
+            <div class="muted">1) Choose sources  -  2) Enter your query  -  3) Set count + quality</div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-# Advanced
-with st.expander("Advanced settings"):
-    st.session_state.out_dir = st.text_input(
-        "Download folder",
-        value=st.session_state.out_dir,
-        help="Where images will be saved",
-    )
-    quality = st.select_slider("Quality", ["Fast", "High", "Ultra"], value="High")
-    min_res = (300, 300) if quality == "Fast" else (600, 600) if quality == "High" else (1000, 1000)
-    min_bytes = st.slider("Minimum file size (KB)", 50, 2000, 120) * 1024
-    orientation = st.selectbox("Orientation", ["Any", "Portrait", "Landscape", "Square"], index=0)
-    allow_types = st.multiselect("Allowed file types", ["jpeg", "png", "webp"], default=["jpeg", "png", "webp"])
-    resume_last = st.checkbox("Resume last run (skip already downloaded)", value=False)
-    use_url_cache = st.checkbox("Use URL cache across sessions", value=True)
-    rate_mode = st.selectbox("Rate limit", ["Normal", "Gentle", "Aggressive"], index=0)
+    # Performance Controls
+    with st.container():
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            turbo = st.checkbox("Turbo mode", value=True, help="Faster parallel downloads")
+        with c2:
+            preview = st.checkbox("Live preview", value=True)
+        with c3:
+            unlock = st.checkbox("Bypass blur", value=True, help="Resolve original high-res URLs")
 
-    st.caption("High-res filtering + dedupe improves quality but can reduce total downloads.")
-
-with st.expander("Maintenance"):
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        if st.button("Clear history"):
-            if clear_file(HISTORY_PATH):
-                st.session_state.history = []
-                st.success("History cleared.")
-            else:
-                st.warning("History not found.")
-    with m2:
-        if st.button("Clear URL cache"):
-            if clear_file(URL_CACHE_PATH):
-                st.success("URL cache cleared.")
-            else:
-                st.warning("URL cache not found.")
-    with m3:
-        if st.button("Clear metadata"):
-            if clear_file(META_PATH):
-                st.success("Last metadata cleared.")
-            else:
-                st.warning("Metadata not found.")
-    if st.button("Clear downloads folder"):
-        ok, removed = clear_folder(st.session_state.out_dir)
-        if ok:
-            st.success(f"Removed {removed} files from downloads folder.")
-        else:
-            st.warning("Downloads folder not found.")
-    if st.button("Clear thumbnail cache"):
-        ok, removed = clear_folder(THUMB_DIR)
-        if ok:
-            st.success(f"Removed {removed} thumbnails.")
-        else:
-            st.warning("Thumbnail cache not found.")
-
-with st.expander("🤖 Telegram Bot Integration"):
-    tg_config = load_telegram_config()
-    bot_mgr = st.session_state.telegram_bot
-
-    t1, t2 = st.columns([3, 1])
-    with t1:
-        new_token = st.text_input(
-            "Telegram Bot Token",
-            value=tg_config.get("token", ""),
-            type="password",
-            help="Obtain from @BotFather on Telegram",
-            key="tg_token_input",
+    # Config Section
+    with st.container():
+        sources = st.multiselect(
+            "Image sources",
+            [
+                "Pinterest",
+                "Unsplash",
+                "Pexels",
+                "Pixabay",
+                "Imgur",
+                "DeviantArt",
+                "Flickr",
+                "Wallhaven",
+                "Wikimedia Commons",
+            ],
+            default=["Pinterest"],
         )
-    with t2:
-        if st.button("Save Token"):
-            tg_config["token"] = new_token.strip()
-            tg_config["enabled"] = True
+        query = st.text_input(
+            "Search query",
+            placeholder="e.g. Romantic Aesthetic",
+            key="query",
+        )
+        num = st.slider("Image count", 5, 200, 40)
+
+    # Quick Chips
+    q_chips = ["Romantic", "Dark Aesthetic", "Minimal", "Nature", "Space", "Lo-Fi"]
+    st.write("Hot topics")
+    cols = st.columns(6)
+    for i, c in enumerate(q_chips):
+        if cols[i].button(c, key=f"q_{i}"):
+            st.session_state.query = c
+            st.rerun()
+
+    # Recent history
+    if st.session_state.history:
+        st.write("Recent searches")
+        h_cols = st.columns(4)
+        for i, h in enumerate(st.session_state.history[:8]):
+            if h_cols[i % 4].button(h, key=f"h_{i}"):
+                st.session_state.query = h
+                st.rerun()
+    else:
+        st.markdown(
+            """
+            <div class="card">
+                <strong>No recent searches.</strong>
+                <div class="muted">Your recent queries will appear here.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    # Advanced
+    with st.expander("Advanced settings"):
+        st.session_state.out_dir = st.text_input(
+            "Download folder",
+            value=st.session_state.out_dir,
+            help="Where images will be saved",
+        )
+        quality = st.select_slider("Quality", ["Fast", "High", "Ultra"], value="High")
+        min_res = (300, 300) if quality == "Fast" else (600, 600) if quality == "High" else (1000, 1000)
+        min_bytes = st.slider("Minimum file size (KB)", 50, 2000, 120) * 1024
+        orientation = st.selectbox("Orientation", ["Any", "Portrait", "Landscape", "Square"], index=0)
+        allow_types = st.multiselect("Allowed file types", ["jpeg", "png", "webp"], default=["jpeg", "png", "webp"])
+        resume_last = st.checkbox("Resume last run (skip already downloaded)", value=False)
+        use_url_cache = st.checkbox("Use URL cache across sessions", value=True)
+        rate_mode = st.selectbox("Rate limit", ["Normal", "Gentle", "Aggressive"], index=0)
+
+        st.caption("High-res filtering + dedupe improves quality but can reduce total downloads.")
+
+    with st.expander("Maintenance"):
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            if st.button("Clear history"):
+                if clear_file(HISTORY_PATH):
+                    st.session_state.history = []
+                    st.success("History cleared.")
+                else:
+                    st.warning("History not found.")
+        with m2:
+            if st.button("Clear URL cache"):
+                if clear_file(URL_CACHE_PATH):
+                    st.success("URL cache cleared.")
+                else:
+                    st.warning("URL cache not found.")
+        with m3:
+            if st.button("Clear metadata"):
+                if clear_file(META_PATH):
+                    st.success("Last metadata cleared.")
+                else:
+                    st.warning("Metadata not found.")
+        if st.button("Clear downloads folder"):
+            ok, removed = clear_folder(st.session_state.out_dir)
+            if ok:
+                st.success(f"Removed {removed} files from downloads folder.")
+            else:
+                st.warning("Downloads folder not found.")
+        if st.button("Clear thumbnail cache"):
+            ok, removed = clear_folder(THUMB_DIR)
+            if ok:
+                st.success(f"Removed {removed} thumbnails.")
+            else:
+                st.warning("Thumbnail cache not found.")
+
+    with st.expander("🤖 Telegram Bot Integration"):
+        tg_config = load_telegram_config()
+        bot_mgr = st.session_state.telegram_bot
+
+        t1, t2 = st.columns([3, 1])
+        with t1:
+            new_token = st.text_input(
+                "Telegram Bot Token",
+                value=tg_config.get("token", ""),
+                type="password",
+                help="Obtain from @BotFather on Telegram",
+                key="tg_token_input",
+            )
+        with t2:
+            if st.button("Save Token"):
+                tg_config["token"] = new_token.strip()
+                tg_config["enabled"] = True
+                save_telegram_config(tg_config)
+                bot_mgr.config = tg_config
+                if not bot_mgr.is_running:
+                    bot_mgr.start()
+                st.success("Token saved and bot started!")
+                st.rerun()
+
+        allowed_chats_str = st.text_input(
+            "Allowed Chat IDs (optional, comma-separated)",
+            value=", ".join(map(str, tg_config.get("allowed_chat_ids", []))),
+            help="Leave empty for open access, or specify allowed Telegram Chat IDs",
+            key="tg_chats_input",
+        )
+        if st.button("Save Allowed Chat IDs"):
+            raw_ids = [c.strip() for c in allowed_chats_str.split(",") if c.strip()]
+            tg_config["allowed_chat_ids"] = raw_ids
             save_telegram_config(tg_config)
             bot_mgr.config = tg_config
-            if not bot_mgr.is_running:
-                bot_mgr.start()
-            st.success("Token saved and bot started!")
-            st.rerun()
+            st.success("Allowed Chat IDs saved!")
 
-    allowed_chats_str = st.text_input(
-        "Allowed Chat IDs (optional, comma-separated)",
-        value=", ".join(map(str, tg_config.get("allowed_chat_ids", []))),
-        help="Leave empty for open access, or specify allowed Telegram Chat IDs",
-        key="tg_chats_input",
-    )
-    if st.button("Save Allowed Chat IDs"):
-        raw_ids = [c.strip() for c in allowed_chats_str.split(",") if c.strip()]
-        tg_config["allowed_chat_ids"] = raw_ids
-        save_telegram_config(tg_config)
-        bot_mgr.config = tg_config
-        st.success("Allowed Chat IDs saved!")
-
-    b1, b2, b3 = st.columns([1.5, 1.5, 3])
-    with b1:
-        if st.button("🚀 Start Bot Daemon", disabled=bot_mgr.is_running):
-            if bot_mgr.start():
-                st.success("Bot started!")
+        b1, b2, b3 = st.columns([1.5, 1.5, 3])
+        with b1:
+            if st.button("🚀 Start Bot Daemon", disabled=bot_mgr.is_running):
+                if bot_mgr.start():
+                    st.success("Bot started!")
+                    st.rerun()
+                else:
+                    st.error("Failed to start bot. Check token.")
+        with b2:
+            if st.button("🛑 Stop Bot Daemon", disabled=not bot_mgr.is_running):
+                bot_mgr.stop()
+                st.info("Bot daemon stopped.")
                 st.rerun()
+        with b3:
+            if bot_mgr.is_running:
+                handle = bot_mgr.bot_info.get("username", "Bot")
+                st.markdown(f"🟢 **Status:** Active (`@{handle}`)")
             else:
-                st.error("Failed to start bot. Check token.")
-    with b2:
-        if st.button("🛑 Stop Bot Daemon", disabled=not bot_mgr.is_running):
-            bot_mgr.stop()
-            st.info("Bot daemon stopped.")
-            st.rerun()
-    with b3:
-        if bot_mgr.is_running:
-            handle = bot_mgr.bot_info.get("username", "Bot")
-            st.markdown(f"🟢 **Status:** Active (`@{handle}`)")
+                st.markdown("🔴 **Status:** Stopped")
+
+        if bot_mgr.logs:
+            st.caption("Recent Telegram Activity Logs:")
+            st.code("\n".join(bot_mgr.logs[-10:]))
+
+    # Run
+    run_disabled = (not query.strip()) or (not sources)
+    run_button = st.button("Start scraping", disabled=run_disabled)
+
+    if run_button:
+        if not query.strip():
+            st.warning("Enter a search query to continue.")
+        elif not sources:
+            st.warning("Select at least one source.")
         else:
-            st.markdown("🔴 **Status:** Stopped")
+            if query not in st.session_state.history:
+                st.session_state.history.insert(0, query)
+                save_history(st.session_state.history)
 
-    if bot_mgr.logs:
-        st.caption("Recent Telegram Activity Logs:")
-        st.code("\n".join(bot_mgr.logs[-10:]))
+            st.session_state.files = []
+            st.session_state.metadata = []
+            st.session_state.errors = []
 
-# Run
-run_disabled = (not query.strip()) or (not sources)
-run_button = st.button("Start scraping", disabled=run_disabled)
+            status = st.status(f"Scraping {', '.join(sources)}...", expanded=True)
+            prog = status.progress(0, text="Starting...")
+            preview_area = st.empty() if preview else None
 
-if run_button:
-    if not query.strip():
-        st.warning("Enter a search query to continue.")
-    elif not sources:
-        st.warning("Select at least one source.")
+            def ui_progress_cb(current, total, path):
+                prog.progress(min(current / total, 1.0), text=f"Downloaded {current}/{total}")
+                if preview and path:
+                    with preview_area.container():
+                        st.image(get_thumbnail(path), width=160)
+
+            try:
+                result = run_scraping_job(
+                    query=query,
+                    count=num,
+                    sources=sources,
+                    out_dir=st.session_state.out_dir,
+                    turbo=turbo,
+                    unlock=unlock,
+                    min_res=min_res,
+                    min_bytes=min_bytes,
+                    orientation=orientation,
+                    allow_types=allow_types,
+                    rate_mode=rate_mode,
+                    use_url_cache=use_url_cache,
+                    resume_last=resume_last,
+                    progress_cb=ui_progress_cb,
+                )
+
+                st.session_state.files = result["files"]
+                st.session_state.metadata = result["metadata"]
+                st.session_state.errors = result["errors"]
+                st.session_state.last_stats = result["stats"]
+
+                status.update(
+                    label=f"Completed: {result['stats']['downloaded']} downloaded, {result['stats']['attempted'] - result['stats']['downloaded']} skipped",
+                    state="complete",
+                )
+            except Exception as e:
+                st.session_state.errors.append(str(e))
+                status.update(label="Error during scraping", state="error")
+                st.error(str(e))
+
+    # Results Summary
+    if st.session_state.metadata:
+        st.subheader("Run summary")
+        st.write(f"Downloaded: {len(st.session_state.files)}")
+        st.write(f"Saved to: {st.session_state.out_dir}")
+        if st.session_state.last_stats:
+            st.write(f"Attempted: {st.session_state.last_stats.get('attempted', 0)}")
+            st.write(f"Retries: {st.session_state.last_stats.get('retried', 0)}")
+            st.write(f"Total requests: {st.session_state.last_stats.get('total_requests', 0)}")
+            st.write(f"Duration (sec): {st.session_state.last_stats.get('duration_sec', 0)}")
+            skipped = st.session_state.last_stats.get("skipped", {})
+            if skipped:
+                st.write("Skipped breakdown:")
+                for k, v in skipped.items():
+                    st.write(f"- {k}: {v}")
+
+            report = json.dumps(st.session_state.last_stats, indent=2)
+            st.download_button("Download run report", report, "run_report.json", "application/json")
+
+        meta_json = json.dumps(st.session_state.metadata, indent=2)
+        meta_csv = metadata_to_csv(st.session_state.metadata)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button("Download metadata (JSON)", meta_json, "metadata.json", "application/json")
+        with c2:
+            st.download_button("Download metadata (CSV)", meta_csv, "metadata.csv", "text/csv")
+
+    # Errors
+    if st.session_state.errors:
+        st.subheader("Errors")
+        st.text_area("Error log", "\n".join(st.session_state.errors), height=150)
+        st.download_button("Download error log", "\n".join(st.session_state.errors), "errors.txt", "text/plain")
+
+    # Results Gallery
+    if st.session_state.files:
+        st.divider()
+        st.subheader(f"Collection ({len(st.session_state.files)})")
+
+        gc1, gc2, gc3 = st.columns([3, 1, 1])
+        with gc2:
+            if st.button("Select all"):
+                st.session_state.select_all = True
+        with gc3:
+            if st.button("Deselect all"):
+                st.session_state.select_all = False
+
+        cols = st.columns(2)
+        sel = []
+        for i, p in enumerate(st.session_state.files):
+            with cols[i % 2]:
+                st.image(get_thumbnail(p), use_container_width=True)
+                cb_key = f"s_{i}_{abs(hash(p)) % 10000000}"
+                if st.checkbox("Add", key=cb_key, value=st.session_state.select_all, label_visibility="collapsed"):
+                    sel.append(p)
+
+        if sel:
+            z_data = create_zip(sel)
+            st.download_button(
+                f"Download {len(sel)} images",
+                z_data,
+                "scraped_assets.zip",
+                "application/zip",
+                use_container_width=True,
+                type="primary",
+            )
     else:
-        if query not in st.session_state.history:
-            st.session_state.history.insert(0, query)
-            save_history(st.session_state.history)
-
-        st.session_state.files = []
-        st.session_state.metadata = []
-        st.session_state.errors = []
-
-        status = st.status(f"Scraping {', '.join(sources)}...", expanded=True)
-        prog = status.progress(0, text="Starting...")
-        preview_area = st.empty() if preview else None
-
-        def ui_progress_cb(current, total, path):
-            prog.progress(min(current / total, 1.0), text=f"Downloaded {current}/{total}")
-            if preview and path:
-                with preview_area.container():
-                    st.image(get_thumbnail(path), width=160)
-
-        try:
-            result = run_scraping_job(
-                query=query,
-                count=num,
-                sources=sources,
-                out_dir=st.session_state.out_dir,
-                turbo=turbo,
-                unlock=unlock,
-                min_res=min_res,
-                min_bytes=min_bytes,
-                orientation=orientation,
-                allow_types=allow_types,
-                rate_mode=rate_mode,
-                use_url_cache=use_url_cache,
-                resume_last=resume_last,
-                progress_cb=ui_progress_cb,
-            )
-
-            st.session_state.files = result["files"]
-            st.session_state.metadata = result["metadata"]
-            st.session_state.errors = result["errors"]
-            st.session_state.last_stats = result["stats"]
-
-            status.update(
-                label=f"Completed: {result['stats']['downloaded']} downloaded, {result['stats']['attempted'] - result['stats']['downloaded']} skipped",
-                state="complete",
-            )
-        except Exception as e:
-            st.session_state.errors.append(str(e))
-            status.update(label="Error during scraping", state="error")
-            st.error(str(e))
-
-# Results Summary
-if st.session_state.metadata:
-    st.subheader("Run summary")
-    st.write(f"Downloaded: {len(st.session_state.files)}")
-    st.write(f"Saved to: {st.session_state.out_dir}")
-    if st.session_state.last_stats:
-        st.write(f"Attempted: {st.session_state.last_stats.get('attempted', 0)}")
-        st.write(f"Retries: {st.session_state.last_stats.get('retried', 0)}")
-        st.write(f"Total requests: {st.session_state.last_stats.get('total_requests', 0)}")
-        st.write(f"Duration (sec): {st.session_state.last_stats.get('duration_sec', 0)}")
-        skipped = st.session_state.last_stats.get("skipped", {})
-        if skipped:
-            st.write("Skipped breakdown:")
-            for k, v in skipped.items():
-                st.write(f"- {k}: {v}")
-
-        report = json.dumps(st.session_state.last_stats, indent=2)
-        st.download_button("Download run report", report, "run_report.json", "application/json")
-
-    meta_json = json.dumps(st.session_state.metadata, indent=2)
-    meta_csv = metadata_to_csv(st.session_state.metadata)
-    c1, c2 = st.columns(2)
-    with c1:
-        st.download_button("Download metadata (JSON)", meta_json, "metadata.json", "application/json")
-    with c2:
-        st.download_button("Download metadata (CSV)", meta_csv, "metadata.csv", "text/csv")
-
-# Errors
-if st.session_state.errors:
-    st.subheader("Errors")
-    st.text_area("Error log", "\n".join(st.session_state.errors), height=150)
-    st.download_button("Download error log", "\n".join(st.session_state.errors), "errors.txt", "text/plain")
-
-# Results Gallery
-if st.session_state.files:
-    st.divider()
-    st.subheader(f"Collection ({len(st.session_state.files)})")
-
-    gc1, gc2, gc3 = st.columns([3, 1, 1])
-    with gc2:
-        if st.button("Select all"):
-            st.session_state.select_all = True
-    with gc3:
-        if st.button("Deselect all"):
-            st.session_state.select_all = False
-
-    cols = st.columns(2)
-    sel = []
-    for i, p in enumerate(st.session_state.files):
-        with cols[i % 2]:
-            st.image(get_thumbnail(p), use_container_width=True)
-            cb_key = f"s_{i}_{abs(hash(p)) % 10000000}"
-            if st.checkbox("Add", key=cb_key, value=st.session_state.select_all, label_visibility="collapsed"):
-                sel.append(p)
-
-    if sel:
-        z_data = get_cached_zip(tuple(sel))
-        st.download_button(
-            f"Download {len(sel)} images",
-            z_data,
-            "scraped_assets.zip",
-            "application/zip",
-            use_container_width=True,
-            type="primary",
+        st.markdown(
+            """
+            <div class="card">
+                <strong>No images yet.</strong>
+                <div class="muted">Run a scrape to see results here.</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-else:
-    st.markdown(
-        """
-        <div class="card">
-            <strong>No images yet.</strong>
-            <div class="muted">Run a scrape to see results here.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+
+
+try:
+    from streamlit.runtime import exists as runtime_exists
+except Exception:
+    runtime_exists = lambda: False
+
+if __name__ == "__main__" or runtime_exists():
+    main_ui()

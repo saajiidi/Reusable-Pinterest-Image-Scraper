@@ -75,7 +75,7 @@ class TelegramBotManager:
         self.bot_info: Dict[str, Any] = {}
         self.current_job_cancel = False
         self.active_jobs_count = 0
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
 
     def log(self, message: str):
         timestamp = time.strftime("%H:%M:%S")
