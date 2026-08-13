@@ -4,3 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 pinterest_downloads/
 *.log
+telegram_config.json
+.scraper_data/
+.ultra_scraper/
+*.zip

@@ -127,7 +127,8 @@ st.markdown(
 )
 
 # Constants
-APP_DIR = os.path.join(os.path.expanduser("~"), ".ultra_scraper")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+APP_DIR = os.path.join(BASE_DIR, ".scraper_data")
 HISTORY_PATH = os.path.join(APP_DIR, "history.json")
 META_PATH = os.path.join(APP_DIR, "last_metadata.json")
 ERRORS_PATH = os.path.join(APP_DIR, "last_errors.txt")
@@ -247,10 +248,8 @@ def resolve_high_res(url, source):
         return url
     try:
         if source == "Pinterest":
-            if "/236x/" in url:
-                return url.replace("/236x/", "/originals/")
-            if "/736x/" in url:
-                return url.replace("/736x/", "/originals/")
+            # Match any /236x/, /474x/, /564x/, /736x/, /1200x/, etc. and replace with /originals/
+            return re.sub(r"/(?:\d+x|originals)/", "/originals/", url)
         if source == "Unsplash":
             if "?" in url:
                 return url.split("?")[0]
@@ -281,13 +280,17 @@ def resolve_high_res(url, source):
 def setup_driver(headless=True):
     chrome_options = Options()
     if headless:
-        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--headless=new")
     chrome_options.add_argument("--no-sandbox")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
     chrome_options.add_argument("--log-level=3")
     chrome_options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
+        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     )
 
     paths = [
@@ -478,9 +481,13 @@ def fast_download(session, url, folder, name, min_size, min_bytes, allow_types, 
         if orientation != "Any" and image_orientation(img.size[0], img.size[1]) != orientation:
             return None, "wrong_orientation", retries
 
-        img_format = (img.format or "JPEG").upper()
-        ext = ".jpg" if img_format == "JPEG" else f".{img_format.lower()}"
-        if img_format.lower() not in allow_types:
+        raw_format = (img.format or "JPEG").upper()
+        canonical_format = "jpeg" if raw_format in ("JPEG", "JPG") else raw_format.lower()
+        ext = ".jpg" if canonical_format == "jpeg" else f".{canonical_format}"
+        
+        type_norm_map = {"jpg": "jpeg", "jpeg": "jpeg", "png": "png", "webp": "webp"}
+        allowed_canon = {type_norm_map.get(t.lower(), t.lower()) for t in allow_types}
+        if canonical_format not in allowed_canon:
             return None, "type_filtered", retries
 
         phash = None
@@ -496,7 +503,7 @@ def fast_download(session, url, folder, name, min_size, min_bytes, allow_types, 
 
         meta = {
             "url": url,
-            "format": img_format,
+            "format": raw_format,
             "width": img.size[0],
             "height": img.size[1],
             "bytes": len(response.content),
@@ -512,9 +519,14 @@ def create_zip(file_paths):
     buf = BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for p in file_paths:
-            if os.path.exists(p):
+            if p and os.path.exists(p):
                 z.write(p, os.path.basename(p))
     return buf.getvalue()
+
+
+@st.cache_data(show_spinner=False)
+def get_cached_zip(file_paths: tuple) -> bytes:
+    return create_zip(list(file_paths))
 
 
 def metadata_to_csv(metadata):
@@ -529,13 +541,13 @@ def metadata_to_csv(metadata):
 
 
 def url_map(query, source):
-    encoded = quote(query)
-    dashed = query.replace(" ", "-")
+    encoded = quote(query.strip())
+    dashed = quote(query.strip().replace(" ", "-"))
     return {
         "Pinterest": f"https://www.pinterest.com/search/pins/?q={encoded}",
         "Unsplash": f"https://unsplash.com/s/photos/{dashed}",
-        "Pexels": f"https://www.pexels.com/search/{query}/",
-        "Pixabay": f"https://pixabay.com/images/search/{query}/",
+        "Pexels": f"https://www.pexels.com/search/{encoded}/",
+        "Pixabay": f"https://pixabay.com/images/search/{encoded}/",
         "Imgur": f"https://imgur.com/search?q={encoded}",
         "DeviantArt": f"https://www.deviantart.com/search?q={encoded}",
         "Flickr": f"https://www.flickr.com/search/?text={encoded}",
@@ -569,10 +581,7 @@ def run_scraping_job(
         out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "UltraScraper")
     os.makedirs(out_dir, exist_ok=True)
 
-    driver = setup_driver()
-    if not driver:
-        raise RuntimeError("ChromeDriver not available. Check your browser driver setup.")
-
+    driver = None
     files = []
     metadata = []
     errors = []
@@ -592,6 +601,10 @@ def run_scraping_job(
     }
 
     try:
+        driver = setup_driver()
+        if not driver:
+            raise RuntimeError("ChromeDriver not available. Check your browser driver setup.")
+
         session = requests.Session()
         found = set()
         hash_list = []
@@ -662,7 +675,7 @@ def run_scraping_job(
                                     [t.lower() for t in allow_types],
                                     orientation,
                                     hash_list,
-                                )
+                                    )
                             ] = u
 
                         for f in concurrent.futures.as_completed(future_map):
@@ -696,7 +709,11 @@ def run_scraping_job(
     except Exception as e:
         errors.append(str(e))
     finally:
-        driver.quit()
+        if driver is not None:
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
     if use_url_cache:
         save_url_cache(url_cache)
@@ -744,12 +761,17 @@ if "out_dir" not in st.session_state:
     st.session_state.out_dir = os.path.join(os.path.expanduser("~"), "Downloads", "UltraScraper")
 if "last_stats" not in st.session_state:
     st.session_state.last_stats = {}
-if "telegram_bot" not in st.session_state:
-    bot_mgr = TelegramBotManager(scraper_runner=run_scraping_job)
-    st.session_state.telegram_bot = bot_mgr
+
+# Telegram Bot Singleton across sessions
+@st.cache_resource
+def get_telegram_bot_manager():
+    manager = TelegramBotManager(scraper_runner=run_scraping_job)
     cfg = load_telegram_config()
     if cfg.get("enabled") and cfg.get("token"):
-        bot_mgr.start()
+        manager.start()
+    return manager
+
+st.session_state.telegram_bot = get_telegram_bot_manager()
 
 # Header
 st.markdown(
@@ -1051,11 +1073,12 @@ if st.session_state.files:
     for i, p in enumerate(st.session_state.files):
         with cols[i % 2]:
             st.image(get_thumbnail(p), use_container_width=True)
-            if st.checkbox("Add", key=f"s_{p}", value=st.session_state.select_all, label_visibility="collapsed"):
+            cb_key = f"s_{i}_{abs(hash(p)) % 10000000}"
+            if st.checkbox("Add", key=cb_key, value=st.session_state.select_all, label_visibility="collapsed"):
                 sel.append(p)
 
     if sel:
-        z_data = create_zip(sel)
+        z_data = get_cached_zip(tuple(sel))
         st.download_button(
             f"Download {len(sel)} images",
             z_data,
